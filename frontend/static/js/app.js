@@ -539,7 +539,37 @@ document.addEventListener('alpine:init', () => {
             return this.totalDebet - this.totalKredit;
         },
 
+        focusNext(event) {
+            const section = event.target.closest('section');
+            if (!section) return;
+            const inputs = Array.from(section.querySelectorAll('.numpad-nav'));
+            const idx = inputs.indexOf(event.target);
+            if (idx === -1) return;
+
+            if (idx < inputs.length - 1) {
+                // Focus the next input
+                const nextInput = inputs[idx + 1];
+                nextInput.focus();
+                if (nextInput.type !== 'date' && typeof nextInput.select === 'function') {
+                    nextInput.select();
+                }
+            } else {
+                // Last input (kredit row), add new row
+                this.addRow();
+                // Then focus the newly added account field in the next tick
+                this.$nextTick(() => {
+                    const newInputs = Array.from(section.querySelectorAll('.numpad-nav'));
+                    // The new row adds 3 inputs: account, debet, kredit. We want to focus the account field, which is at length - 3
+                    if (newInputs.length >= 3) {
+                        newInputs[newInputs.length - 3].focus();
+                    }
+                });
+            }
+        },
+
         async submitPost() {
+            if (this.showSettings || this.showKontoplan || this.showMoms) return;
+
             if (this.diff !== 0) {
                 this.showToast('Verifikationen balanserar inte!', 'error');
                 return;

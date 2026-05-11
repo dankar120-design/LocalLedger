@@ -93,7 +93,7 @@
             </div>
         </section>
 
-        <section class="panel" x-show="!showSettings && !showKontoplan && !(fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked)">
+        <section class="panel" x-show="!showSettings && !showKontoplan && !(fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked)" @keydown.window.ctrl.enter.prevent="submitPost()">
             <h2 style="margin-bottom: 1rem; font-size: 1.1rem;">Ny Verifikation</h2>
 
             <div style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; background-color: rgba(59, 130, 246, 0.1); padding: 10px 15px; border-radius: 6px; border: 1px solid rgba(59, 130, 246, 0.3);">
@@ -112,11 +112,11 @@
             <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1rem; margin-bottom: 1.5rem;">
                 <div class="form-group">
                     <label>Datum</label>
-                    <input type="date" x-model="form.date">
+                    <input type="date" x-model="form.date" class="numpad-nav" @keydown.enter.prevent="focusNext($event)" autofocus>
                 </div>
                 <div class="form-group">
                     <label>Beskrivning</label>
-                    <input type="text" x-model="form.text" placeholder="T.ex. Inköp av dator">
+                    <input type="text" x-model="form.text" class="numpad-nav" @keydown.enter.prevent="focusNext($event)" placeholder="T.ex. Inköp av dator">
                 </div>
             </div>
 
@@ -161,9 +161,9 @@
 
             <template x-for="(row, index) in form.rows" :key="index">
                 <div class="row-grid">
-                    <input type="text" inputmode="numeric" x-model="row.account" list="bas-accounts" placeholder="Konto (ex 1930)">
-                    <input type="number" x-model.number="row.debet" min="0" @input="if(row.debet < 0) row.debet = Math.abs(row.debet)">
-                    <input type="number" x-model.number="row.kredit" min="0" @input="if(row.kredit < 0) row.kredit = Math.abs(row.kredit)">
+                    <input type="text" inputmode="numeric" x-model="row.account" list="bas-accounts" class="numpad-nav" @keydown.enter.prevent="focusNext($event)" placeholder="Konto (ex 1930)">
+                    <input type="number" x-model.number="row.debet" min="0" class="numpad-nav" @keydown.enter.prevent="focusNext($event)" @input="if(row.debet < 0) row.debet = Math.abs(row.debet)">
+                    <input type="number" x-model.number="row.kredit" min="0" class="numpad-nav" @keydown.enter.prevent="focusNext($event)" @input="if(row.kredit < 0) row.kredit = Math.abs(row.kredit)">
                     <button class="icon-btn" @click="removeRow(index)" :disabled="form.rows.length <= 2">❌</button>
                 </div>
             </template>
@@ -176,7 +176,7 @@
             </div>
 
             <div style="margin-top: 1.5rem; text-align: right;">
-                <button class="primary" @click="submitPost()" :disabled="diff !== 0 || !form.date || !form.text">Bokför Verifikation</button>
+                <button class="primary" @click="submitPost()" :disabled="diff !== 0 || !form.date || !form.text" title="Spara med Ctrl+Enter">Bokför Verifikation (Ctrl+Enter)</button>
             </div>
         </section>
 
