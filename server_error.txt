@@ -1,0 +1,5 @@
+No database found at C:\Users\dka12\Documents\Kodning\LocalLedger\sandbox_e2e\ledger.db. Initializing fresh workspace...
+Initializing LocalLedger at: C:\Users\dka12\Documents\Kodning\LocalLedger\sandbox_e2e
+Opening browser at http://127.0.0.1:8080
+Starting LocalLedger API on http://127.0.0.1:8080
+SECURITY TOKEN: 329c709bb1eec14decb795bd5b87310e375387e160928aebc324f43cd869431c

@@ -1,0 +1,16 @@
+# Data
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+data/*.sqlite-journal
+data/*.sqlite-wal
+data/*.sqlite-shm
+
+# Binaries
+*.exe
+localledger
+
+# Vendor/Temp
+node_modules/
+vendor/
+.env

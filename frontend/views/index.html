@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalLedger</title>
+    <!-- Säker DOM-injektion från servern -->
+    <meta name="api-token" content="{{.Token}}">
+    
+    <link rel="stylesheet" href="/static/css/style.css">
+    
+    <!-- Ladda logik och ramverk lokalt -->
+    <script defer src="/static/js/app.js"></script>
+    <script defer src="/static/js/alpine.min.js"></script>
+</head>
+<body x-data="ledgerApp()">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="logo">
+            <span class="logo-icon">▲</span> LocalLedger
+        </div>
+        
+        <nav>
+            <a class="nav-item" href="#" @click.prevent="showSettings=false; showKontoplan=false; showMoms=false" :class="!showSettings && !showKontoplan && !showMoms ? 'active' : ''">Huvudbok</a>
+            <a class="nav-item" :href="activeFiscalYearId ? '/reports?year_id=' + activeFiscalYearId : '/reports'" target="_blank" style="display: flex; align-items: center; gap: 0.5rem;"><span style="font-size: 1.2rem;">📊</span> Rapporter</a>
+            <a class="nav-item" href="/api/reports/samlingsplan" target="_blank" style="display: flex; align-items: center; gap: 0.5rem;"><span style="font-size: 1.2rem;">📑</span> Samlingsplan</a>
+            <a class="nav-item" href="#" @click.prevent="showSettings=false; showKontoplan=false; showMoms=true" :class="showMoms ? 'active' : ''" style="display: flex; align-items: center; gap: 0.5rem;"><span style="font-size: 1.2rem;">💰</span> Momsredovisning</a>
+            <a class="nav-item" href="#" @click.prevent="showSettings=false; showKontoplan=true; showMoms=false" :class="showKontoplan ? 'active' : ''" style="display: flex; align-items: center; gap: 0.5rem;"><span style="font-size: 1.2rem;">📖</span> Kontoplan</a>
+            <a class="nav-item" href="#" @click.prevent="showSettings=true; showKontoplan=false; showMoms=false" :class="showSettings ? 'active' : ''" style="display: flex; align-items: center; gap: 0.5rem;"><span style="font-size: 1.2rem;">⚙️</span> Inställningar</a>
+            <a class="nav-item" @click.prevent="fillGaps()" style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem;"><span style="font-size: 1.2rem;">🔧</span> Laga Nummerserie</a>
+        </nav>
+
+        <div class="status-badge" :class="!verifyOk ? 'error' : ''" style="margin-bottom: 1rem;">
+            <div class="status-dot"></div>
+            <span class="status-text" x-text="verifyStatus"></span>
+        </div>
+
+        <button @click="shutdownServer()" class="shutdown-btn">
+            ⏻ Stäng av systemet
+        </button>
+        
+        <div style="margin-top: auto; padding-top: 1.5rem; font-size: 0.75rem; color: var(--text-muted); opacity: 0.8; line-height: 1.4;">
+            <strong>Ansvarsfriskrivning</strong><br>
+            LocalLedger tillhandahålls i befintligt skick. Du ansvarar själv för att din bokföring följer BFL. Utvecklaren tar inget ansvar för eventuella fel eller skattetillägg.
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content" :class="showInspector ? 'inspector-open' : ''">
+        <datalist id="bas-accounts">
+            <template x-for="acc in basAccounts" :key="acc.code">
+                <option :value="acc.code" x-text="acc.code + ' - ' + acc.name"></option>
+            </template>
+        </datalist>
+
+        <header class="header">
+            <div>
+                <h1>Huvudbok</h1>
+                <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem;">
+                    <select x-model="activeFiscalYearId" @change="fetchVerifications()" class="form-control" style="width: auto; padding: 0.25rem 0.5rem; background: var(--surface); border: 1px solid var(--border); color: var(--text);">
+                        <template x-for="fy in fiscalYears" :key="fy.id">
+                            <option :value="fy.id" x-text="fy.start_date.substring(0,4) === fy.end_date.substring(0,4) ? fy.start_date.substring(0,4) + (fy.is_locked ? ' (Låst)' : '') : fy.start_date.substring(0,4) + '/' + fy.end_date.substring(0,4) + (fy.is_locked ? ' (Låst)' : '')"></option>
+                        </template>
+                    </select>
+                    
+                    <button @click="createFiscalYear()" class="btn btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">
+                        ➕ Nytt Räkenskapsår
+                    </button>
+                    
+                    <button x-show="fiscalYears.length > 0 && !fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked" @click="lockFiscalYear(activeFiscalYearId)" class="btn btn-danger" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; background: var(--danger); opacity: 0.8;">
+                        🔒 Lås Detta År
+                    </button>
+                </div>
+            </div>
+            <button class="primary" @click="fetchVerifications()">🔄 Uppdatera</button>
+        </header>
+
+        <!-- Bokföringsformulär -->
+        <section class="panel" x-show="!showSettings && !showKontoplan && fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked">
+            <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                <span style="font-size: 3rem;">🔒</span>
+                <h2>Räkenskapsåret är låst</h2>
+                <p>Inga fler verifikationer kan bokföras eller ändras i detta år.</p>
+            </div>
+        </section>
+
+        <section class="panel" x-show="!showSettings && !showKontoplan && !(fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked)">
+            <h2 style="margin-bottom: 1rem; font-size: 1.1rem;">Ny Verifikation</h2>
+
+            <div style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; background-color: rgba(59, 130, 246, 0.1); padding: 10px 15px; border-radius: 6px; border: 1px solid rgba(59, 130, 246, 0.3);">
+                <span style="font-size: 1.5rem;">🪄</span>
+                <div style="flex-grow: 1;">
+                    <strong style="display: block; font-size: 0.9rem; color: var(--accent); margin-bottom: 4px;">Trollstaven (Snabbmallar)</strong>
+                    <select x-model="selectedTemplate" @change="applyTemplate()" style="width: 100%; padding: 8px; border-radius: 4px; background: var(--bg); color: var(--text); border: 1px solid var(--border); cursor: pointer;">
+                        <option value="">-- Välj en händelse för att autofylla --</option>
+                        <template x-for="t in templates" :key="t.id">
+                            <option :value="t.id" x-text="t.name"></option>
+                        </template>
+                    </select>
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1rem; margin-bottom: 1.5rem;">
+                <div class="form-group">
+                    <label>Datum</label>
+                    <input type="date" x-model="form.date">
+                </div>
+                <div class="form-group">
+                    <label>Beskrivning</label>
+                    <input type="text" x-model="form.text" placeholder="T.ex. Inköp av dator">
+                </div>
+            </div>
+
+            <div class="dropzone" 
+                 @dragover.prevent="$el.classList.add('dragover')" 
+                 @dragleave.prevent="$el.classList.remove('dragover')" 
+                 @drop.prevent="$el.classList.remove('dragover'); handleFileDrop($event)"
+                 @click="$refs.fileInput.click()"
+                 style="border: 2px dashed var(--border-color); padding: 1.5rem; text-align: center; border-radius: 4px; margin-bottom: 1.5rem; cursor: pointer; transition: all 0.2s;">
+                
+                <input type="file" x-ref="fileInput" @change="handleFileDrop" style="display: none" accept=".pdf,image/png,image/jpeg">
+                
+                <template x-if="!form.attachmentName">
+                    <div style="color: var(--text-muted);">
+                        <span style="font-size: 2rem;">📄</span><br>
+                        Dra och släpp kvitto (PDF, PNG, JPG) här eller klicka för att bläddra. Max 10MB.
+                    </div>
+                </template>
+                <template x-if="form.attachmentName">
+                    <div>
+                        <span style="font-size: 1.2rem; color: var(--primary);">📎 <strong x-text="form.attachmentName"></strong></span><br>
+                        
+                        <!-- Dynamisk Preview -->
+                        <template x-if="form.attachmentMime && form.attachmentMime.startsWith('image/')">
+                            <img :src="form.attachmentUrl" @click.stop="showInspector = true" style="max-height: 150px; margin-top: 10px; border-radius: 4px; display: block; margin-left: auto; margin-right: auto; border: 1px solid var(--border-color); cursor: pointer;" title="Klicka för att förstora" />
+                        </template>
+                        <template x-if="form.attachmentMime === 'application/pdf'">
+                            <div @click.stop="showInspector = true" style="font-size: 3rem; margin-top: 10px; color: var(--text-muted); cursor: pointer;" title="Klicka för att öppna dokumentet">📄</div>
+                        </template>
+
+                        <button class="icon-btn" @click.stop="removeAttachment()" style="margin-top: 0.5rem; color: #ef4444;">❌ Ta bort bilaga</button>
+                    </div>
+                </template>
+            </div>
+
+            <div style="margin-bottom: 0.5rem; display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 1rem;">
+                <label>Konto</label>
+                <label>Debet (SEK)</label>
+                <label>Kredit (SEK)</label>
+                <label></label>
+            </div>
+
+            <template x-for="(row, index) in form.rows" :key="index">
+                <div class="row-grid">
+                    <input type="text" inputmode="numeric" x-model="row.account" list="bas-accounts" placeholder="Konto (ex 1930)">
+                    <input type="number" x-model.number="row.debet" min="0" @input="if(row.debet < 0) row.debet = Math.abs(row.debet)">
+                    <input type="number" x-model.number="row.kredit" min="0" @input="if(row.kredit < 0) row.kredit = Math.abs(row.kredit)">
+                    <button class="icon-btn" @click="removeRow(index)" :disabled="form.rows.length <= 2">❌</button>
+                </div>
+            </template>
+
+            <button style="margin-top: 0.5rem;" @click="addRow()">+ Lägg till rad</button>
+
+            <div class="diff-alert">
+                <span>Total: <strong x-text="totalDebet"></strong> / <strong x-text="totalKredit"></strong></span>
+                <span :class="diff !== 0 ? 'diff-error' : 'diff-ok'" x-text="diff !== 0 ? 'Balanserar ej (Diff: ' + diff + ')' : 'Balanserar'"></span>
+            </div>
+
+            <div style="margin-top: 1.5rem; text-align: right;">
+                <button class="primary" @click="submitPost()" :disabled="diff !== 0 || !form.date || !form.text">Bokför Verifikation</button>
+            </div>
+        </section>
+
+        <!-- Tabell -->
+        <section class="panel" x-show="!showSettings && !showKontoplan && !showMoms">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <input type="text" x-model="searchQuery" placeholder="Sök konto, text, ID..." style="max-width: 300px;">
+                <button class="secondary" @click="sealVerifications()" title="Låser alla utkast äldre än 24h manuellt">🔒 Lås WORM-kedja</button>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Datum</th>
+                        <th>Beskrivning</th>
+                        <th>Kontering</th>
+                        <th>Hash (WORM)</th>
+                        <th>Åtgärd</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="v in filteredVerifications" :key="v.id">
+                        <tr>
+                            <td><strong>A<span x-text="v.id"></span></strong></td>
+                            <td x-text="v.date.split('T')[0]"></td>
+                            <td x-text="v.text"></td>
+                            <td>
+                                <ul class="row-list">
+                                    <template x-for="r in v.rows" :key="r.account">
+                                        <li>
+                                            <span x-text="r.account"></span>
+                                            <template x-if="r.debet > 0">
+                                                <span class="debet" x-text="(r.debet / 100).toFixed(2)"></span>
+                                            </template>
+                                            <template x-if="r.kredit > 0">
+                                                <span class="kredit" x-text="(r.kredit / 100).toFixed(2)"></span>
+                                            </template>
+                                        </li>
+                                    </template>
+                                </ul>
+                            </td>
+                            <td class="hash-cell">
+                                <span x-show="!v.hash" title="Utkast (Ej kryptografiskt låst)">📝 Utkast</span>
+                                <span x-show="v.hash" title="Kryptografiskt låst (WORM)">🔒 <span x-text="v.hash ? v.hash.substring(0, 16) + '...' : ''"></span></span>
+                                <template x-if="v.attachment_hash">
+                                    <div style="margin-top: 0.25rem;">
+                                        <a :href="'/api/attachments/' + v.attachment_hash" target="_blank" style="font-size: 0.8rem; text-decoration: none; color: var(--primary);">📎 Visa Kvitto</a>
+                                    </div>
+                                </template>
+                            </td>
+                            <td>
+                                <template x-if="v.rows && v.rows.length > 0 && !v.is_stornoed && !v.storno_ref_id && !v.text.startsWith('Reversering av') && !v.text.startsWith('Makulerad')">
+                                    <div style="display: flex; gap: 0.5rem;" x-show="!(fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked)">
+                                        <button x-show="!v.hash" class="icon-btn" @click="voidDraft(v.id)" title="Makulera utkast">🗑️</button>
+                                        <button x-show="v.hash" class="icon-btn" @click="stornoVerification(v.id)" title="Stornera låst post">🔁</button>
+                                    </div>
+                                </template>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="verifications.length === 0">
+                        <td colspan="6" style="text-align: center; color: var(--text-muted);">Inga verifikationer hittades.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Momsredovisning -->
+        <section class="panel" x-show="showMoms" style="display: none;">
+            <h2 style="margin-bottom: 1.5rem; font-size: 1.1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">Momsredovisning (MVCA)</h2>
+            
+            <div style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 2rem;">
+                <div class="form-group" style="flex: 1;">
+                    <label>Snabbval</label>
+                    <select x-model="vatPeriodPreset" @change="setVatPreset($event.target.value)" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px;">
+                        <option value="">-- Välj period --</option>
+                        <option value="Q1">Kvartal 1 (Jan-Mar)</option>
+                        <option value="Q2">Kvartal 2 (Apr-Jun)</option>
+                        <option value="Q3">Kvartal 3 (Jul-Sep)</option>
+                        <option value="Q4">Kvartal 4 (Okt-Dec)</option>
+                        <option value="Year">Helår</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Startdatum</label>
+                    <input type="date" x-model="vatStartDate" @change="vatPeriodPreset=''; if(vatEndDate) calculateVatReport()">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Slutdatum</label>
+                    <input type="date" x-model="vatEndDate" @change="vatPeriodPreset=''; if(vatStartDate) calculateVatReport()">
+                </div>
+                <div class="form-group">
+                    <button class="primary" @click="calculateVatReport()">Beräkna</button>
+                </div>
+            </div>
+
+            <template x-if="vatReport">
+                <div style="background: var(--bg-alt); padding: 2rem; border-radius: 12px; border: 1px solid var(--border);">
+                    <h3 style="margin-bottom: 1.5rem; color: var(--text);">Sammanställning <span x-text="vatStartDate"></span> till <span x-text="vatEndDate"></span></h3>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+                        <div style="background: white; padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border);">
+                            <div style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.5rem;">Skattepliktig Försäljning</div>
+                            <div style="font-size: 1.5rem; font-weight: 600;" x-text="(vatReport.total_sales / 100).toFixed(2) + ' kr'"></div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">Konto 3XXX (Underlag för Ruta 05/06/07)</div>
+                        </div>
+                        
+                        <div style="background: white; padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border);">
+                            <div style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.5rem;" x-text="netVatText"></div>
+                            <div style="font-size: 1.5rem; font-weight: 600; color: var(--primary);" x-text="(Math.abs(vatReport.net_vat) / 100).toFixed(2) + ' kr'"></div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">Detta belopp bokas mot 2650 vid omföring.</div>
+                        </div>
+                    </div>
+
+                    <table style="margin-bottom: 2rem;">
+                        <thead>
+                            <tr>
+                                <th>Post</th>
+                                <th style="text-align: right;">Belopp</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Utgående moms (Moms på försäljning) <br><small style="color: var(--text-muted);">Kontoklass 261, 262, 263</small></td>
+                                <td style="text-align: right; font-weight: 500;" x-text="(vatReport.outgoing_vat / 100).toFixed(2) + ' kr'"></td>
+                            </tr>
+                            <tr>
+                                <td>Ingående moms (Moms på inköp) <br><small style="color: var(--text-muted);">Kontoklass 264</small></td>
+                                <td style="text-align: right; font-weight: 500;" x-text="'-' + (vatReport.incoming_vat / 100).toFixed(2) + ' kr'"></td>
+                            </tr>
+                            <tr style="background: var(--bg);">
+                                <td><strong>Nettomoms</strong></td>
+                                <td style="text-align: right; font-weight: 600;" x-text="(vatReport.net_vat / 100).toFixed(2) + ' kr'"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                        <span style="font-size: 0.9rem; color: var(--text-muted);">Verifikation skapas på slutdatumet (<span x-text="vatEndDate"></span>)</span>
+                        <button class="primary" style="background: #27ae60;" @click="transferVat()" :disabled="vatReport.net_vat === 0">💰 Bokför Omföring & Lås Perioden</button>
+                    </div>
+                </div>
+            </template>
+        </section>
+
+        <!-- Kontoplan -->
+        <section class="panel" x-show="showKontoplan" style="display: none;">
+            <h2 style="margin-bottom: 1rem; font-size: 1.1rem;">Lägg till nytt konto</h2>
+            <div style="display: flex; gap: 1rem; margin-bottom: 2rem; align-items: flex-end;">
+                <div class="form-group" style="flex: 1;">
+                    <label>Kontonummer (4 siffror)</label>
+                    <input type="text" x-model="newAccount.code" @input="guessAccountType()" placeholder="Ex. 7510" maxlength="4">
+                </div>
+                <div class="form-group" style="flex: 2;">
+                    <label>Kontonamn</label>
+                    <input type="text" x-model="newAccount.name" placeholder="Ex. Lagstadgade sociala avgifter">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Typ (K1)</label>
+                    <select x-model="newAccount.type" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg); color: var(--text);">
+                        <option value="Tillgång">Tillgång</option>
+                        <option value="Skuld">Skuld</option>
+                        <option value="Intäkt">Intäkt</option>
+                        <option value="Kostnad">Kostnad</option>
+                    </select>
+                </div>
+                <button class="btn primary" @click="saveAccount()" :disabled="!newAccount.code || !newAccount.name || newAccount.code.length !== 4">Lägg till konto +</button>
+            </div>
+
+            <h2 style="margin-bottom: 1rem; font-size: 1.1rem;">Aktiva konton</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Konto</th>
+                        <th>Namn</th>
+                        <th>Typ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="acc in basAccounts" :key="acc.code">
+                        <tr>
+                            <td><strong x-text="acc.code"></strong></td>
+                            <td x-text="acc.name"></td>
+                            <td><span class="badge" x-text="acc.type" style="background: rgba(59, 130, 246, 0.1); color: var(--primary); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;"></span></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Inställningar / SIE-4 Export -->
+        <section class="panel" x-show="showSettings" style="display: none;">
+            <h2 style="margin-bottom: 1rem; font-size: 1.1rem;">Företagsinställningar</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                <div class="form-group">
+                    <label>Företagsnamn (För SIE-4)</label>
+                    <input type="text" x-model="settings.name" placeholder="T.ex. Mitt Företag AB">
+                </div>
+                <div class="form-group">
+                    <label>Organisationsnummer (För SIE-4)</label>
+                    <input type="text" x-model="settings.org_number" placeholder="T.ex. 555555-5555">
+                </div>
+            </div>
+            <button class="btn primary" @click="saveSettings()">Spara Inställningar</button>
+            
+            <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--border-color);">
+            
+            <h2 style="margin-bottom: 1rem; font-size: 1.1rem;">Säkerhetskopia & Export</h2>
+            <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;"><strong>Fullständig Säkerhetskopia (Rekommenderas)</strong><br>Ladda ner en .zip-fil innehållande hela din databas och alla dina WORM-låsta PDF-kvitton. Spara denna externt (USB/Moln) regelbundet för att uppfylla bokföringslagens krav på säkerhet mot dataförlust.</p>
+            <a href="/api/export/backup" class="btn" style="background-color: #3b82f6; color: white; text-align: center; display: inline-block; text-decoration: none; padding: 10px 20px; font-weight: bold; border-radius: 4px; margin-bottom: 1.5rem;">💾 Ladda ner Säkerhetskopia (.zip)</a>
+
+            <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;"><strong>SIE-4 Export (Till Revisorn)</strong><br>Exportera hela räkenskapsårets bokföring till branschstandarden SIE-4 (PC8). Filen innehåller samtliga konton, balanser och verifikationer (med tecken vända enligt SIE-regler) redo för import i bokföringsprogram.</p>
+            <a href="/api/export/sie4" class="btn" style="background-color: #10b981; color: white; text-align: center; display: inline-block; text-decoration: none; padding: 10px 20px; font-weight: bold; border-radius: 4px;">📥 Ladda ner SIE-4 Export (.se)</a>
+        </section>
+
+    </main>
+
+    <!-- Toast Notification -->
+    <div class="toast" x-show="toast" :class="toast?.type" x-transition x-cloak>
+        <span x-text="toast?.msg"></span>
+    </div>
+
+    <!-- Kvitto Inspector Panel -->
+    <aside class="receipt-inspector" :class="showInspector ? 'open' : ''" @keydown.escape.window="showInspector = false" x-cloak x-init="$nextTick(()=> $el.focus())" tabindex="0">
+        <div class="inspector-header">
+            <h3>Granskning</h3>
+            <button class="icon-btn" @click="showInspector = false" style="background: none; font-size: 1.2rem; padding: 0;">❌</button>
+        </div>
+        <div class="inspector-body">
+            <template x-if="form.attachmentMime && form.attachmentMime.startsWith('image/')">
+                <img :src="form.attachmentUrl" style="width: 100%; height: auto; border-radius: 4px;" />
+            </template>
+            <template x-if="form.attachmentMime === 'application/pdf'">
+                <iframe :src="form.attachmentUrl" style="width: 100%; height: 100%; flex-grow: 1; border: none; background: white; border-radius: 4px;"></iframe>
+            </template>
+        </div>
+    </aside>
+
+</body>
+</html>
