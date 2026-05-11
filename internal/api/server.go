@@ -143,8 +143,8 @@ func (s *Server) Token() string {
 // authMiddleware kräver 'Authorization: Bearer <token>' för alla /api/-anrop.
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Vi vill skydda allt under /api/ utom /api/attachments/, /api/reports/ och /api/export/
-		if strings.HasPrefix(r.URL.Path, "/api/") && !strings.HasPrefix(r.URL.Path, "/api/attachments/") && !strings.HasPrefix(r.URL.Path, "/api/reports/") && !strings.HasPrefix(r.URL.Path, "/api/export/") {
+		// Vi vill skydda allt under /api/ utom /api/attachments/, /api/reports/samlingsplan, /api/reports/excel och /api/export/
+		if strings.HasPrefix(r.URL.Path, "/api/") && !strings.HasPrefix(r.URL.Path, "/api/attachments/") && !strings.HasPrefix(r.URL.Path, "/api/reports/samlingsplan") && !strings.HasPrefix(r.URL.Path, "/api/reports/excel") && !strings.HasPrefix(r.URL.Path, "/api/export/") {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 				http.Error(w, "Unauthorized: Missing Bearer Token", http.StatusUnauthorized)

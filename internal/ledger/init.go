@@ -236,6 +236,11 @@ func runMigrations(db *sql.DB) error {
 		ALTER TABLE period_locks ADD COLUMN locked_by TEXT NOT NULL DEFAULT 'System';
 		UPDATE schema_version SET version = 'v1.4.0', app_min_version = 'v1.3.0';
 		`,
+		// Version 8: BFL Compliance (IB)
+		`
+		ALTER TABLE verifications ADD COLUMN type TEXT NOT NULL DEFAULT 'NORMAL';
+		UPDATE schema_version SET version = 'v1.5.0', app_min_version = 'v1.4.0';
+		`,
 	}
 
 	for i := currentVersion; i < len(migrations); i++ {

@@ -35,7 +35,7 @@ func (l *Ledger) GenerateSIE4(yearID int64) ([]byte, error) {
 	buf.WriteString("#FLAGGA 0\r\n")
 	buf.WriteString("#FORMAT PC8\r\n")
 	buf.WriteString("#SIETYP 4\r\n")
-	buf.WriteString("#PROGRAM \"LocalLedger\" 1.3\r\n")
+	buf.WriteString("#PROGRAM \"LocalLedger\" 1.4.0\r\n")
 	buf.WriteString(fmt.Sprintf("#GEN %s\r\n", time.Now().Format("20060102")))
 	buf.WriteString(fmt.Sprintf("#FNAMN \"%s\"\r\n", sanitize(settings.Name)))
 	buf.WriteString(fmt.Sprintf("#ORGNR %s\r\n", settings.OrgNumber))
@@ -53,45 +53,57 @@ func (l *Ledger) GenerateSIE4(yearID int64) ([]byte, error) {
 		           FROM verification_rows vr 
 		           JOIN verifications v ON vr.verification_id = v.id 
 		           WHERE vr.account = a.code AND v.date >= ? AND v.date <= ?
-		       ), 0) as balance
+		       ), 0) as balance,
+		       COALESCE((
+		           SELECT SUM(vr.debet - vr.kredit) 
+		           FROM verification_rows vr 
+		           JOIN verifications v ON vr.verification_id = v.id 
+		           WHERE vr.account = a.code AND v.date >= ? AND v.date <= ? AND v.type = 'IB'
+		       ), 0) as ib_balance
 		FROM accounts a
 		ORDER BY a.code
-	`, fy.StartDate, fy.EndDate)
+	`, fy.StartDate, fy.EndDate, fy.StartDate, fy.EndDate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate balances: %w", err)
 	}
 	defer rows.Close()
 
 	type AccBalance struct {
-		Code    string
-		Balance int64 // i ören, raw Debet - Kredit
+		Code      string
+		Balance   int64 // i ören, raw Debet - Kredit
+		IBBalance int64
 	}
 	var accBalances []AccBalance
 
 	for rows.Next() {
 		var code, name string
-		var balance int64
-		if err := rows.Scan(&code, &name, &balance); err != nil {
+		var balance, ibBalance int64
+		if err := rows.Scan(&code, &name, &balance, &ibBalance); err != nil {
 			return nil, err
 		}
 		
 		// KONTO tag
 		buf.WriteString(fmt.Sprintf("#KONTO %s \"%s\"\r\n", code, sanitize(name)))
-		accBalances = append(accBalances, AccBalance{Code: code, Balance: balance})
+		accBalances = append(accBalances, AccBalance{Code: code, Balance: balance, IBBalance: ibBalance})
 	}
 	
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("account iteration error: %w", err)
 	}
 
-	// Output IB, UB, RES (Since it's year 1, IB is 0)
+	// Output IB, UB, RES
 	for _, ab := range accBalances {
 		// Konvertera ören till decimal (10050 -> 100.50)
 		balanceFloat := float64(ab.Balance) / 100.0
+		ibFloat := float64(ab.IBBalance) / 100.0
 
 		// Balanskonton: 1xxx och 2xxx
 		if strings.HasPrefix(ab.Code, "1") || strings.HasPrefix(ab.Code, "2") {
-			buf.WriteString(fmt.Sprintf("#IB 0 %s 0.00\r\n", ab.Code))
+			if ab.IBBalance != 0 {
+				buf.WriteString(fmt.Sprintf("#IB 0 %s %.2f\r\n", ab.Code, ibFloat))
+			} else {
+				buf.WriteString(fmt.Sprintf("#IB 0 %s 0.00\r\n", ab.Code))
+			}
 			if ab.Balance != 0 {
 				buf.WriteString(fmt.Sprintf("#UB 0 %s %.2f\r\n", ab.Code, balanceFloat))
 			}
@@ -103,12 +115,12 @@ func (l *Ledger) GenerateSIE4(yearID int64) ([]byte, error) {
 		}
 	}
 
-	// 4. Verifications
+	// 4. Verifications (Exkludera type = 'IB' eftersom de är redovisade ovan)
 	vRows, err := l.db.Query(`
 		SELECT v.id, v.date, v.text, vr.account, vr.debet, vr.kredit
 		FROM verifications v
 		JOIN verification_rows vr ON v.id = vr.verification_id
-		WHERE v.date >= ? AND v.date <= ?
+		WHERE v.date >= ? AND v.date <= ? AND v.type != 'IB'
 		ORDER BY v.id, vr.id
 	`, fy.StartDate, fy.EndDate)
 	if err != nil {

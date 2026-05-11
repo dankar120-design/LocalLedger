@@ -106,22 +106,36 @@
         .positive { color: var(--success); }
         .negative { color: var(--danger); }
 
-        .print-btn {
-            display: block;
-            margin: 0 auto 30px auto;
+        .toolbar {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+
+        .btn {
             padding: 10px 20px;
-            background-color: var(--accent);
-            color: white;
-            border: none;
+            background-color: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--border);
             border-radius: 6px;
             cursor: pointer;
             font-size: 1rem;
             font-weight: 600;
-            transition: background-color 0.2s;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
-        .print-btn:hover {
-            background-color: #2563eb;
+        .btn.primary {
+            background-color: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .btn:hover {
+            filter: brightness(1.2);
         }
 
         @media print {
@@ -131,18 +145,24 @@
                 padding: 0;
             }
             .container { max-width: 100%; }
-            .print-btn { display: none; }
+            .no-print { display: none !important; }
             table { background-color: white; border: 1px solid #ccc; }
             th, td { border-bottom: 1px solid #ccc; }
-            th { background-color: #f4f4f4; color: black; }
+            th { background-color: #f4f4f4; color: black; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .header, h2, h3, .text-muted { color: black; border-color: black; }
             .positive, .negative { color: black !important; }
+            .total-row { background-color: #f0fdf4; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
     </style>
+    <script id="report-data" type="application/json">{{json .}}</script>
 </head>
 <body>
     <div class="container">
-        <button class="print-btn" onclick="window.print()">🖨️ Skriv ut rapport</button>
+        <div class="toolbar no-print">
+            <button class="btn" onclick="window.print()">📄 Spara som PDF</button>
+            <button class="btn primary" onclick="downloadExcel()">📈 Spara som Excel (.xlsx)</button>
+            <button class="btn" onclick="downloadCSV()" style="background: transparent; color: var(--text-muted); border-color: transparent;">📊 Exportera Rådata (CSV)</button>
+        </div>
 
         <div class="header">
             <h1>Finansiell Rapport</h1>
@@ -280,5 +300,89 @@
         </table>
 
     </div>
+
+    <script>
+        function downloadExcel() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const yearId = urlParams.get('year_id') || '';
+            window.location.href = `/api/reports/excel?year_id=${yearId}`;
+        }
+
+        function downloadCSV() {
+            try {
+                // Hämta inbäddad data
+                const rawData = document.getElementById('report-data').textContent;
+                const data = JSON.parse(rawData);
+                
+                let csv = '\uFEFF'; // BOM för svensk Excel (UTF-8)
+                const sep = ';';
+                
+                // Helper för att säkra text (escape dubbla citat och slå in i citat)
+                const escapeCSV = (str) => {
+                    if (!str) return '""';
+                    return '"' + String(str).replace(/"/g, '""') + '"';
+                };
+
+                // Helper för att formatera belopp (1234.50 -> 1234,50)
+                const formatMoney = (cents) => {
+                    if (!cents) return '0,00';
+                    return (cents / 100).toFixed(2).replace('.', ',');
+                };
+
+                csv += `Finansiell Rapport - ${data.FiscalYear}\n\n`;
+
+                // --- RESULTATRÄKNING ---
+                csv += "RESULTATRÄKNING\n";
+                csv += `Konto${sep}Beskrivning${sep}Belopp (SEK)\n`;
+                
+                csv += "Intäkter\n";
+                (data.Income || []).forEach(row => {
+                    csv += `${escapeCSV(row.AccountCode)}${sep}${escapeCSV(row.AccountName)}${sep}${formatMoney(row.Balance)}\n`;
+                });
+                csv += `Summa Intäkter${sep}${sep}${formatMoney(data.TotalIncome)}\n\n`;
+
+                csv += "Kostnader\n";
+                (data.Expenses || []).forEach(row => {
+                    csv += `${escapeCSV(row.AccountCode)}${sep}${escapeCSV(row.AccountName)}${sep}${formatMoney(row.Balance)}\n`;
+                });
+                csv += `Summa Kostnader${sep}${sep}${formatMoney(data.TotalExpenses)}\n\n`;
+
+                csv += `Årets Resultat${sep}${sep}${formatMoney(data.NetIncome)}\n\n\n`;
+
+                // --- BALANSRÄKNING ---
+                csv += "BALANSRÄKNING\n";
+                csv += `Konto${sep}Beskrivning${sep}Belopp (SEK)\n`;
+                
+                csv += "Tillgångar\n";
+                (data.Assets || []).forEach(row => {
+                    csv += `${escapeCSV(row.AccountCode)}${sep}${escapeCSV(row.AccountName)}${sep}${formatMoney(row.Balance)}\n`;
+                });
+                csv += `Summa Tillgångar${sep}${sep}${formatMoney(data.TotalAssets)}\n\n`;
+
+                csv += "Skulder & Eget Kapital\n";
+                (data.Liabilities || []).forEach(row => {
+                    csv += `${escapeCSV(row.AccountCode)}${sep}${escapeCSV(row.AccountName)}${sep}${formatMoney(row.Balance)}\n`;
+                });
+                csv += `Summa Skulder${sep}${sep}${formatMoney(data.TotalLiabilities)}\n`;
+                csv += `Årets Resultat${sep}${sep}${formatMoney(data.NetIncome)}\n`;
+                csv += `Summa Skulder & Eget Kapital${sep}${sep}${formatMoney(data.CalculatedEquity)}\n`;
+
+                // Generera nedladdning
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `LocalLedger_Rapport_${data.FiscalYear}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+            } catch (err) {
+                console.error("Fel vid CSV-generering:", err);
+                alert("Kunde inte generera Excel-filen. Se konsol för detaljer.");
+            }
+        }
+    </script>
 </body>
 </html>

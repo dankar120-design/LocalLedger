@@ -4,6 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LocalLedger</title>
+    
+    <!-- The True Sentinel: Early Crash Protection -->
+    <script>
+        window.__earlyErrors = [];
+        window.onerror = function(msg, src, line, col, err) {
+            window.__earlyErrors.push({msg, src, line, col, ts: Date.now()});
+        };
+        window.onunhandledrejection = function(e) {
+            window.__earlyErrors.push({msg: "Promise Rejection: " + e.reason, src: "unknown", line: 0, col: 0, ts: Date.now()});
+        };
+    </script>
+
     <!-- Säker DOM-injektion från servern -->
     <meta name="api-token" content="{{.Token}}">
     
@@ -21,7 +33,8 @@
     <!-- Sidebar -->
     <aside class="sidebar">
         <div class="logo">
-            <span class="logo-icon">▲</span> LocalLedger
+            <svg class="logo-icon-svg" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            LocalLedger
         </div>
         
         <nav>
@@ -48,6 +61,11 @@
             <span x-text="theme === 'dark' ? '☀️' : '🌙'" style="font-size: 1.2rem;"></span>
         </div>
 
+        <button @click="showBugLogger = true" class="nav-item" style="margin-top: 0.5rem; background: transparent; border: 1px solid var(--border); position: relative; width: 100%; justify-content: center;">
+            <span style="font-size: 1.2rem;">🐛</span> Systemlogg
+            <span x-show="bugLog.length > 0" x-cloak style="position: absolute; top: -5px; right: -5px; width: 12px; height: 12px; background: var(--danger); border-radius: 50%; box-shadow: 0 0 8px var(--danger);"></span>
+        </button>
+
         <div style="margin-top: 1.5rem; padding-top: 1.5rem; font-size: 0.75rem; color: var(--text-muted); opacity: 0.8; line-height: 1.4; border-top: 1px solid var(--border);">
             <strong>Ansvarsfriskrivning</strong><br>
             LocalLedger tillhandahålls i befintligt skick.
@@ -66,7 +84,7 @@
             <div>
                 <h1>Huvudbok</h1>
                 <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem;">
-                    <select x-model="activeFiscalYearId" @change="fetchVerifications()" class="form-control" style="width: auto; padding: 0.25rem 0.5rem; background: var(--surface); border: 1px solid var(--border); color: var(--text);">
+                    <select x-model="activeFiscalYearId" @change="fetchVerifications(); syncFormDateWithFiscalYear();" class="form-control" style="width: auto; padding: 0.25rem 0.5rem; background: var(--surface); border: 1px solid var(--border); color: var(--text);">
                         <template x-for="fy in fiscalYears" :key="fy.id">
                             <option :value="fy.id" x-text="fy.start_date.substring(0,4) === fy.end_date.substring(0,4) ? fy.start_date.substring(0,4) + (fy.is_locked ? ' (Låst)' : '') : fy.start_date.substring(0,4) + '/' + fy.end_date.substring(0,4) + (fy.is_locked ? ' (Låst)' : '')"></option>
                         </template>
@@ -81,8 +99,31 @@
                     </button>
                 </div>
             </div>
-            <button class="primary" @click="fetchVerifications()">🔄 Uppdatera</button>
+            <div style="display: flex; gap: 0.5rem;">
+                <button class="btn btn-secondary" @click="showDashboard = !showDashboard" title="Visa/Dölj finansiell översikt (Alt+D)" style="padding: 0.5rem 1rem; border-color: var(--border);">📊 Översikt</button>
+                <button class="primary" @click="fetchVerifications()">🔄 Uppdatera</button>
+            </div>
         </header>
+
+        <!-- Mini Dashboard -->
+        <section class="panel mini-dashboard" x-show="showDashboard" x-transition x-cloak style="display: none;">
+            <div class="kpi-item">
+                <span class="kpi-label">Omsättning</span>
+                <span class="kpi-value" x-text="(dashboard.income / 100).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })"></span>
+            </div>
+            <div class="kpi-item">
+                <span class="kpi-label">Kostnader</span>
+                <span class="kpi-value" x-text="(dashboard.expenses / 100).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })"></span>
+            </div>
+            <div class="kpi-item">
+                <span class="kpi-label">Resultat</span>
+                <span class="kpi-value" :class="dashboard.net >= 0 ? 'text-success' : 'text-danger'" x-text="(dashboard.net / 100).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })"></span>
+            </div>
+            <div class="kpi-item">
+                <span class="kpi-label">Tillgångar</span>
+                <span class="kpi-value" x-text="(dashboard.assets / 100).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })"></span>
+            </div>
+        </section>
 
         <!-- Bokföringsformulär -->
         <section class="panel" x-show="!showSettings && !showKontoplan && fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked">
@@ -124,7 +165,8 @@
             <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1rem; margin-bottom: 1.5rem;">
                 <div class="form-group">
                     <label>Datum</label>
-                    <input type="date" x-model="form.date" class="numpad-nav" @keydown.enter.prevent="focusNext($event)" autofocus>
+                    <input type="date" x-model="form.date" :min="activeFiscalYear?.start_date" :max="activeFiscalYear?.end_date" class="numpad-nav" @keydown.enter.prevent="focusNext($event)" @input="formDateError = ''" autofocus>
+                    <div x-show="formDateError" x-text="formDateError" style="color: var(--danger); font-size: 0.8rem; margin-top: 0.25rem;"></div>
                 </div>
                 <div class="form-group">
                     <label>Beskrivning</label>
@@ -147,18 +189,23 @@
                     </div>
                 </template>
                 <template x-if="form.attachmentName">
-                    <div>
-                        <span style="font-size: 1.2rem; color: var(--primary);">📎 <strong x-text="form.attachmentName"></strong></span><br>
+                    <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); padding: 1rem; border-radius: 8px; cursor: default;" @click.stop>
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span style="font-size: 1.1rem; color: var(--success); font-weight: 500;">
+                                ✅ <strong x-text="form.attachmentName"></strong>
+                            </span>
+                            <span style="font-size: 0.85rem; color: var(--text-muted); background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;" x-text="form.attachmentSize"></span>
+                        </div>
                         
                         <!-- Dynamisk Preview -->
                         <template x-if="form.attachmentMime && form.attachmentMime.startsWith('image/')">
-                            <img :src="form.attachmentUrl" @click.stop="showInspector = true" style="max-height: 150px; margin-top: 10px; border-radius: 4px; display: block; margin-left: auto; margin-right: auto; border: 1px solid var(--border-color); cursor: pointer;" title="Klicka för att förstora" />
+                            <img :src="form.attachmentUrl" @click.stop="inspectCurrentReceipt()" style="max-height: 120px; margin-top: 10px; border-radius: 4px; display: block; margin-left: auto; margin-right: auto; border: 1px solid var(--border-color); cursor: zoom-in;" title="Klicka för att granska" />
                         </template>
                         <template x-if="form.attachmentMime === 'application/pdf'">
-                            <div @click.stop="showInspector = true" style="font-size: 3rem; margin-top: 10px; color: var(--text-muted); cursor: pointer;" title="Klicka för att öppna dokumentet">📄</div>
+                            <div @click.stop="inspectCurrentReceipt()" style="font-size: 3rem; margin-top: 10px; color: var(--text-muted); cursor: zoom-in; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Klicka för att granska PDF">📄</div>
                         </template>
 
-                        <button class="icon-btn" @click.stop="removeAttachment()" style="margin-top: 0.5rem; color: #ef4444;">❌ Ta bort bilaga</button>
+                        <button class="icon-btn" @click.stop="removeAttachment()" style="margin-top: 1rem; color: var(--danger); font-size: 0.9rem; padding: 6px 12px; background: rgba(248, 113, 113, 0.1); border-radius: 4px;">❌ Ta bort bilaga</button>
                     </div>
                 </template>
             </div>
@@ -170,7 +217,7 @@
                 <label></label>
             </div>
 
-            <template x-for="(row, index) in form.rows" :key="index">
+            <template x-for="(row, index) in form.rows" :key="row._key || index">
                 <div class="row-grid">
                     <input type="text" inputmode="numeric" x-model="row.account" list="bas-accounts" class="numpad-nav" @keydown.enter.prevent="focusNext($event)" placeholder="Konto (ex 1930)">
                     <input type="number" x-model.number="row.debet" min="0" class="numpad-nav" @keydown.enter.prevent="focusNext($event)" @input="if(row.debet < 0) row.debet = Math.abs(row.debet)">
@@ -230,11 +277,15 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <template x-for="v in filteredVerifications" :key="v.id">
-                        <tr>
+                    <template x-for="(v, index) in filteredVerifications" :key="v.id">
+                        <tr :style="'animation-delay: ' + Math.min(index * 0.05, 0.5) + 's'" :class="{ 'storno-original': v.is_stornoed }">
                             <td><strong>A<span x-text="v.id"></span></strong></td>
                             <td x-text="v.date.split('T')[0]"></td>
-                            <td x-text="v.text"></td>
+                            <td>
+                                <span x-text="v.text"></span>
+                                <span class="badge-storno" x-show="v.is_stornoed">Stornerad</span>
+                                <span class="badge-correction" x-show="v.storno_ref_id">Rättelse för A<span x-text="v.storno_ref_id"></span></span>
+                            </td>
                             <td>
                                 <ul class="row-list">
                                     <template x-for="r in v.rows" :key="r.account">
@@ -256,12 +307,12 @@
                                 <div x-show="v.hash" style="font-size: 0.65rem; margin-top: 4px; opacity: 0.7;" x-text="v.hash.substring(0, 16) + '...'"></div>
                                 <template x-if="v.attachment_hash">
                                     <div style="margin-top: 0.25rem;">
-                                        <a :href="'/api/attachments/' + v.attachment_hash" target="_blank" style="font-size: 0.8rem; text-decoration: none; color: var(--primary);">📎 Visa Kvitto</a>
+                                        <a href="#" @click.prevent="inspectSavedReceipt(v.attachment_hash, v.attachment_mime)" style="font-size: 0.8rem; text-decoration: none; color: var(--primary); cursor: pointer;">📎 Visa Kvitto</a>
                                     </div>
                                 </template>
                             </td>
                             <td>
-                                <template x-if="v.rows && v.rows.length > 0 && !v.is_stornoed && !v.storno_ref_id && !v.text.startsWith('Reversering av') && !v.text.startsWith('Makulerad')">
+                                <template x-if="v.rows && v.rows.length > 0 && !v.is_stornoed && !v.storno_ref_id">
                                     <div style="display: flex; gap: 0.5rem;" x-show="!(fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked)">
                                         <button x-show="!v.hash" class="icon-btn" @click="voidDraft(v.id)" title="Makulera utkast">🗑️</button>
                                         <button x-show="v.hash" class="icon-btn" @click="stornoVerification(v.id)" title="Stornera låst post">🔁</button>
@@ -420,9 +471,59 @@
             <h2 style="margin-bottom: 1rem; font-size: 1.1rem;">Säkerhetskopia & Export</h2>
             <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;"><strong>Fullständig Säkerhetskopia (Rekommenderas)</strong><br>Ladda ner en .zip-fil innehållande hela din databas och alla dina WORM-låsta PDF-kvitton. Spara denna externt (USB/Moln) regelbundet för att uppfylla bokföringslagens krav på säkerhet mot dataförlust.</p>
             <a href="/api/export/backup" class="btn" style="background-color: #3b82f6; color: white; text-align: center; display: inline-block; text-decoration: none; padding: 10px 20px; font-weight: bold; border-radius: 4px; margin-bottom: 1.5rem;">💾 Ladda ner Säkerhetskopia (.zip)</a>
+            <button class="btn" @click="showRestoreModal = true" style="background-color: var(--danger); box-shadow: 0 4px 12px rgba(248, 113, 113, 0.3); color: white; text-align: center; display: inline-block; padding: 10px 20px; font-weight: bold; border-radius: 4px; margin-bottom: 1.5rem; border: none; cursor: pointer;">⚠️ Återställ från Säkerhetskopia</button>
+
+            <!-- Restore Modal -->
+            <div x-show="showRestoreModal" @keydown.escape.window="if(showRestoreModal && !restoreComplete) showRestoreModal = false" tabindex="-1" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999;" x-cloak>
+                <div class="panel" style="max-width: 500px; width: 100%; border: 1px solid var(--danger); box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+                    <h2 style="color: var(--danger); display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+                        ⚠️ Katastrofåterställning
+                    </h2>
+                    
+                    <template x-if="!restoreComplete">
+                        <div>
+                            <p style="margin-bottom: 1rem; color: var(--text-main); line-height: 1.5;">
+                                Du är på väg att skriva över hela din nuvarande databas och alla kvitton med innehållet från en säkerhetskopia (.zip). <strong>Detta går inte att ångra.</strong>
+                            </p>
+                            <p style="margin-bottom: 1.5rem; color: var(--text-muted); font-size: 0.9rem;">
+                                Om återställningen lyckas kommer programmet att stänga av sig själv för att byta ut filerna säkert. Du får sedan starta det igen.
+                            </p>
+                            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                                <button @click="showRestoreModal = false">Avbryt</button>
+                                <input type="file" id="restoreUpload" accept=".zip" style="display: none;" @change="uploadRestoreFile($event)">
+                                <label for="restoreUpload" class="btn primary" style="background: var(--danger); cursor: pointer;">Fortsätt och välj fil</label>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <template x-if="restoreComplete">
+                        <div style="text-align: center; padding: 2rem 0;">
+                            <div style="font-size: 3rem; margin-bottom: 1rem;">✅</div>
+                            <h3 style="margin-bottom: 1rem; color: #10b981;">Återställning genomförd</h3>
+                            <p style="color: var(--text-muted); margin-bottom: 2rem;">
+                                Databasen och kvittona har bytts ut. LocalLedger har stängts av i bakgrunden.
+                                <br><br><strong>Du kan nu stänga detta fönster och starta programmet igen.</strong>
+                            </p>
+                        </div>
+                    </template>
+                </div>
+            </div>
 
             <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;"><strong>SIE-4 Export (Till Revisorn)</strong><br>Exportera hela räkenskapsårets bokföring till branschstandarden SIE-4 (PC8). Filen innehåller samtliga konton, balanser och verifikationer (med tecken vända enligt SIE-regler) redo för import i bokföringsprogram.</p>
             <a href="/api/export/sie4" class="btn" style="background-color: #10b981; color: white; text-align: center; display: inline-block; text-decoration: none; padding: 10px 20px; font-weight: bold; border-radius: 4px;">📥 Ladda ner SIE-4 Export (.se)</a>
+
+            <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--border-color);">
+
+            <h2 style="margin-bottom: 1rem; font-size: 1.1rem;">Årsavslut & Data Onboarding</h2>
+            
+            <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;"><strong>Generera Ingående Balans (IB)</strong><br>Används vid årsavslut. Knappen hämtar utgående balans från det år du anger, och skapar en Ingående Balans (IB) på dag 1 i det <em>valda aktiva</em> året. Balansräkningen måste balansera (0) innan detta kan göras.</p>
+            <button class="btn primary" @click="generateIB()" style="background-color: #f59e0b; margin-bottom: 1.5rem;">⚖️ Generera Ingående Balans till Detta År</button>
+
+            <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;"><strong>SIE-4 Import (Data Onboarding)</strong><br>Ladda upp en befintlig <code>.se</code>-fil. <strong>Varning:</strong> Kan ENDAST göras på ett helt tomt räkenskapsår. Hela filen importeras atomärt och skyddas direkt av WORM-kedjan.</p>
+            <div style="background: var(--bg); border: 1px dashed var(--border-color); padding: 1rem; border-radius: 4px; text-align: center;">
+                <input type="file" id="sieUpload" accept=".se" style="display: none;" @change="uploadSIEFile($event)">
+                <label for="sieUpload" class="btn" style="background-color: #8b5cf6; color: white; cursor: pointer; display: inline-block; padding: 10px 20px; font-weight: bold; border-radius: 4px;">📂 Välj SIE-4 fil att importera</label>
+            </div>
         </section>
 
     </main>
@@ -432,6 +533,32 @@
         <span x-text="toast?.msg"></span>
     </div>
 
+    <!-- BugLogger Modal -->
+    <div x-show="showBugLogger" @keydown.escape.window="if(showBugLogger) showBugLogger = false" tabindex="-1" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999;" x-cloak>
+        <div class="panel" style="max-width: 800px; width: 100%; border: 1px solid var(--danger); box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2 style="color: var(--danger); display: flex; align-items: center; gap: 0.5rem;">
+                    🐛 Sentinel BugLogger
+                </h2>
+                <button @click="showBugLogger = false" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.5rem;">&times;</button>
+            </div>
+            
+            <p style="margin-bottom: 1rem; color: var(--text-muted); font-size: 0.9rem;">
+                Här samlas alla underliggande JavaScript-fel och ohanterade systemhändelser. 
+                Om systemet beter sig oväntat, kopiera denna logg.
+            </p>
+
+            <textarea readonly style="width: 100%; height: 300px; background: rgba(0,0,0,0.5); color: #f87171; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; font-family: monospace; font-size: 0.85rem; resize: none; margin-bottom: 1rem;" x-text="bugLog.length > 0 ? bugLog.join('\n') : 'Inga fel registrerade. Systemet är stabilt.'"></textarea>
+
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; padding-top: 1rem; border-top: 1px solid var(--border);">
+                <button @click="clearBugLog()" :disabled="bugLog.length === 0">Rensa</button>
+                <button class="primary" @click="copyBugLog()" :disabled="bugLog.length === 0">
+                    Kopiera Logg
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Kvitto Inspector Panel -->
     <aside class="receipt-inspector" :class="showInspector ? 'open' : ''" @keydown.escape.window="showInspector = false" x-cloak x-init="$nextTick(()=> $el.focus())" tabindex="0">
         <div class="inspector-header">
@@ -439,11 +566,11 @@
             <button class="icon-btn" @click="showInspector = false" style="background: none; font-size: 1.2rem; padding: 0;">❌</button>
         </div>
         <div class="inspector-body">
-            <template x-if="form.attachmentMime && form.attachmentMime.startsWith('image/')">
-                <img :src="form.attachmentUrl" style="width: 100%; height: auto; border-radius: 4px;" />
+            <template x-if="inspector.mime && inspector.mime.startsWith('image/')">
+                <img :src="inspector.url" style="width: 100%; height: auto; border-radius: 4px;" />
             </template>
-            <template x-if="form.attachmentMime === 'application/pdf'">
-                <iframe :src="form.attachmentUrl" style="width: 100%; height: 100%; flex-grow: 1; border: none; background: white; border-radius: 4px;"></iframe>
+            <template x-if="inspector.mime === 'application/pdf'">
+                <iframe :src="inspector.url" style="width: 100%; height: 100%; flex-grow: 1; border: none; background: white; border-radius: 4px;"></iframe>
             </template>
         </div>
     </aside>

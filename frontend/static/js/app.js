@@ -8,12 +8,20 @@ document.addEventListener('alpine:init', () => {
         toast: null,
         fiscalYears: [],
         activeFiscalYearId: null,
+        formDateError: '',
         showInspector: false,
+        inspector: { url: '', mime: '' },
         showSettings: false,
         showKontoplan: false,
         showMoms: false,
         showSealModal: false,
+        showRestoreModal: false,
+        restoreComplete: false,
+        showBugLogger: false,
         isSealing: false,
+        bugLog: [],
+        showDashboard: false,
+        dashboard: { income: 0, expenses: 0, net: 0, assets: 0 },
         vatReport: null,
         vatStartDate: '',
         vatEndDate: '',
@@ -41,7 +49,7 @@ document.addEventListener('alpine:init', () => {
                 vatRate: 0.25,
                 accountTotal: '1930', // Debet
                 accountVat: '2611',   // Kredit
-                accountBase: '3041'   // Kredit
+                accountBase: '3010'   // Kredit
             },
             {
                 id: 'egen_insattning',
@@ -146,14 +154,52 @@ document.addEventListener('alpine:init', () => {
             attachmentBase64: '',
             attachmentName: '',
             attachmentMime: '',
+            attachmentSize: '',
             attachmentUrl: '',
             rows: [
-                { account: '1930', debet: 0, kredit: 0 },
-                { account: '3010', debet: 0, kredit: 0 }
+                { _key: Date.now() + 1, account: '1930', debet: 0, kredit: 0 },
+                { _key: Date.now() + 2, account: '3010', debet: 0, kredit: 0 }
             ]
         },
 
+        get activeFiscalYear() {
+            return this.fiscalYears.find(f => f.id == this.activeFiscalYearId);
+        },
+
+        syncFormDateWithFiscalYear() {
+            this.formDateError = '';
+            const fy = this.activeFiscalYear;
+            if (!fy) return;
+
+            const current = this.form.date;
+            if (current < fy.start_date || current > fy.end_date) {
+                const today = new Date().toISOString().split('T')[0];
+                if (today >= fy.start_date && today <= fy.end_date) {
+                    this.form.date = today;
+                } else {
+                    this.form.date = fy.start_date;
+                }
+            }
+        },
+
         async init() {
+            // Sentinel Principle: Bind early errors and set up persistence
+            const stored = (() => { try { return JSON.parse(sessionStorage.getItem('bugLog')) || []; } catch { return []; } })();
+            const early = (window.__earlyErrors || []).map(err => typeof err === 'object' ? `[${new Date(err.ts).toLocaleTimeString()}] EARLY ERROR: ${err.msg} at ${err.src}:${err.line}` : err);
+            
+            // Sentinel Principle: Registrera watch innan state uppdateras
+            this.$watch('bugLog', val => sessionStorage.setItem('bugLog', JSON.stringify(val)));
+            
+            // Uppdateringen triggar nu sparandet direkt
+            this.bugLog = [...stored, ...early];
+            
+            window.onerror = (message, source, lineno, colno, error) => {
+                this.bugLog.push(`[${new Date().toLocaleTimeString()}] ERROR: ${message} at ${source}:${lineno}`);
+            };
+            window.onunhandledrejection = (event) => {
+                this.bugLog.push(`[${new Date().toLocaleTimeString()}] PROMISE REJECTION: ${event.reason}`);
+            };
+
             // Read token from DOM injection
             const meta = document.querySelector('meta[name="api-token"]');
             if (meta) {
@@ -163,10 +209,20 @@ document.addEventListener('alpine:init', () => {
             }
 
             await this.fetchFiscalYears();
+            this.syncFormDateWithFiscalYear();
             this.fetchAccounts();
             this.fetchVerifications();
+            this.fetchDashboardData();
             this.fetchSettings();
             this.runVerification();
+
+            // Toggle dashboard med Alt+D
+            window.addEventListener('keydown', (e) => {
+                if (e.altKey && e.key.toLowerCase() === 'd') {
+                    e.preventDefault();
+                    this.showDashboard = !this.showDashboard;
+                }
+            });
         },
 
         async fetchAccounts() {
@@ -226,6 +282,7 @@ document.addEventListener('alpine:init', () => {
                     this.showToast('Nytt räkenskapsår skapat framgångsrikt', 'success');
                     await this.fetchFiscalYears();
                     this.activeFiscalYearId = this.fiscalYears[0].id; // Välj det nya
+                    this.syncFormDateWithFiscalYear();
                     this.fetchVerifications();
                 } else {
                     const err = await res.json();
@@ -269,8 +326,8 @@ document.addEventListener('alpine:init', () => {
                 const res = await this.authFetch(url);
                 if (res.ok) {
                     const data = await res.json();
-                    // Sorterna fallande (nyaste först) om data inte redan är det
-                    this.verifications = data || [];
+                    // Sortera fallande (nyaste först)
+                    this.verifications = (data || []).sort((a, b) => b.id - a.id);
                 } else {
                     const err = await res.json();
                     this.showToast('Misslyckades hämta data: ' + err.error, 'error');
@@ -374,6 +431,7 @@ document.addEventListener('alpine:init', () => {
                 if (res.ok) {
                     this.showToast('Verifikation stornerad framgångsrikt', 'success');
                     this.fetchVerifications();
+                    this.fetchDashboardData();
                 } else {
                     const err = await res.json();
                     this.showToast('Fel vid stornering: ' + err.error, 'error');
@@ -390,6 +448,7 @@ document.addEventListener('alpine:init', () => {
                 if (res.ok) {
                     this.showToast('Utkast makulerat', 'success');
                     this.fetchVerifications();
+                    this.fetchDashboardData();
                 } else {
                     const err = await res.json();
                     this.showToast('Fel vid makulering: ' + err.error, 'error');
@@ -397,6 +456,47 @@ document.addEventListener('alpine:init', () => {
             } catch (e) {
                 this.showToast('Nätverksfel', 'error');
             }
+        },
+
+        async fetchDashboardData() {
+            if (!this.activeFiscalYearId) return;
+            try {
+                const res = await this.authFetch(`/api/reports/financial?year_id=${this.activeFiscalYearId}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                this.dashboard.income = data.TotalIncome || 0;
+                this.dashboard.expenses = data.TotalExpenses || 0;
+                this.dashboard.net = data.NetIncome || 0;
+                this.dashboard.assets = data.TotalAssets || 0;
+            } catch (e) {
+                console.error("Kunde inte hämta dashboard-data", e);
+            }
+        },
+
+        updateDashboardLocally(rows) {
+            let addedIncome = 0;
+            let addedExpense = 0;
+            let addedAssets = 0;
+
+            for (const row of rows) {
+                const accStr = String(row.account);
+                const debet = row.debet ? Math.round(row.debet * 100) : 0;
+                const kredit = row.kredit ? Math.round(row.kredit * 100) : 0;
+                
+                // Baserat på standardiserad BAS-kontoplan
+                if (accStr.startsWith('1')) {
+                    addedAssets += (debet - kredit);
+                } else if (accStr.startsWith('3')) {
+                    addedIncome += (kredit - debet);
+                } else if (/^[4-8]/.test(accStr)) {
+                    addedExpense += (debet - kredit);
+                }
+            }
+
+            this.dashboard.income += addedIncome;
+            this.dashboard.expenses += addedExpense;
+            this.dashboard.assets += addedAssets;
+            this.dashboard.net = this.dashboard.income - this.dashboard.expenses;
         },
 
         async sealVerifications() {
@@ -463,13 +563,32 @@ document.addEventListener('alpine:init', () => {
 
         setVatPreset(preset) {
             this.vatPeriodPreset = preset;
-            const currentYear = this.activeFiscalYearId ? this.fiscalYears.find(y => y.id === this.activeFiscalYearId)?.start_date.substring(0, 4) : new Date().getFullYear();
-            
-            if (preset === 'Q1') { this.vatStartDate = `${currentYear}-01-01`; this.vatEndDate = `${currentYear}-03-31`; }
-            else if (preset === 'Q2') { this.vatStartDate = `${currentYear}-04-01`; this.vatEndDate = `${currentYear}-06-30`; }
-            else if (preset === 'Q3') { this.vatStartDate = `${currentYear}-07-01`; this.vatEndDate = `${currentYear}-09-30`; }
-            else if (preset === 'Q4') { this.vatStartDate = `${currentYear}-10-01`; this.vatEndDate = `${currentYear}-12-31`; }
-            else if (preset === 'Year') { this.vatStartDate = `${currentYear}-01-01`; this.vatEndDate = `${currentYear}-12-31`; }
+            if (!preset) return;
+
+            const fy = this.fiscalYears.find(f => f.id == this.activeFiscalYearId);
+            if (!fy) return;
+
+            const start = new Date(fy.start_date);
+            let periodStart = new Date(start);
+            let periodEnd = new Date(start);
+
+            if (preset === 'Year') {
+                periodEnd = new Date(fy.end_date);
+            } else {
+                let offsetMonths = 0;
+                if (preset === 'Q1') offsetMonths = 0;
+                else if (preset === 'Q2') offsetMonths = 3;
+                else if (preset === 'Q3') offsetMonths = 6;
+                else if (preset === 'Q4') offsetMonths = 9;
+
+                periodStart.setMonth(start.getMonth() + offsetMonths);
+                periodEnd = new Date(periodStart);
+                periodEnd.setMonth(periodStart.getMonth() + 3);
+                periodEnd.setDate(periodEnd.getDate() - 1);
+            }
+
+            this.vatStartDate = periodStart.toISOString().split('T')[0];
+            this.vatEndDate = periodEnd.toISOString().split('T')[0];
             
             if (this.vatStartDate && this.vatEndDate) {
                 this.calculateVatReport();
@@ -498,6 +617,106 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        async uploadRestoreFile(event) {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+            const file = files[0];
+
+            const formData = new FormData();
+            formData.append('backup_zip', file);
+
+            try {
+                this.showToast('Återställer databasen. Vänligen vänta...', 'info');
+                const res = await fetch('/api/import/backup', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${this.token}` },
+                    body: formData
+                });
+                
+                if (!res.ok) {
+                    const errText = await res.text();
+                    throw new Error(errText);
+                }
+                
+                // Server returned 200 OK. It will drop & exit in 1 sec.
+                this.restoreComplete = true;
+                this.showToast('Återställning klar!', 'success');
+            } catch(e) {
+                this.showToast('Återställning misslyckades: ' + e.message, 'error');
+            }
+            event.target.value = '';
+        },
+
+	        async uploadSIEFile(event) {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+            const file = files[0];
+
+            if (!confirm(`Är du säker på att du vill importera ${file.name} till det aktiva räkenskapsåret?`)) {
+                event.target.value = '';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('yearID', this.activeYearID);
+
+            try {
+                const res = await fetch('/api/import/sie4', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${this.token}` },
+                    body: formData
+                });
+                
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error);
+                }
+                
+                this.showToast('SIE-fil importerad framgångsrikt!', 'success');
+                this.fetchData();
+            } catch(e) {
+                this.showToast('Import misslyckades: ' + e.message, 'error');
+            }
+            event.target.value = '';
+        },
+
+        async generateIB() {
+            const fromYearStr = prompt("Ange ID för det föregående räkenskapsåret som ska stängas (t.ex. 1):");
+            if (!fromYearStr) return;
+            
+            const fromYearID = parseInt(fromYearStr);
+            if (isNaN(fromYearID)) return;
+
+            if (!confirm(`Ska vi överföra Utgående Balans från år ${fromYearID} som Ingående Balans till det valda aktiva året?`)) return;
+
+            try {
+                const res = await this.authFetch(`/api/fiscal-years/${this.activeYearID}/generate-ib`, {
+                    method: 'POST',
+                    body: JSON.stringify({ from_year_id: fromYearID })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error);
+                }
+
+                this.showToast('Ingående Balans skapad!', 'success');
+                this.fetchData();
+            } catch(e) {
+                this.showToast('Misslyckades att generera IB: ' + e.message, 'error');
+            }
+        },
+
+        formatBytes(bytes, decimals = 2) {
+            if (!+bytes) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+        },
+
         handleFileDrop(e) {
             const files = e.dataTransfer ? e.dataTransfer.files : e.target.files;
             if (!files || files.length === 0) return;
@@ -520,11 +739,34 @@ document.addEventListener('alpine:init', () => {
                 this.form.attachmentBase64 = b64;
                 this.form.attachmentName = file.name;
                 this.form.attachmentMime = file.type;
+                this.form.attachmentSize = this.formatBytes(file.size);
+                
+                if (this.form.attachmentUrl) {
+                    URL.revokeObjectURL(this.form.attachmentUrl);
+                }
                 this.form.attachmentUrl = URL.createObjectURL(file);
-                this.showInspector = true;
+                
+                // Om filen droppas och kontot är 1930/3010, flytta fokus
+                this.$nextTick(() => {
+                    if (this.$refs.formDesc) this.$refs.formDesc.focus();
+                });
                 this.showToast("Bilaga bifogad: " + file.name, "success");
             };
             reader.readAsDataURL(file);
+        },
+
+        inspectSavedReceipt(hash, mime) {
+            if (!hash) return;
+            this.inspector.mime = mime;
+            this.inspector.url = '/api/attachments/' + hash;
+            this.showInspector = true;
+        },
+
+        inspectCurrentReceipt() {
+            if (!this.form.attachmentUrl) return;
+            this.inspector.mime = this.form.attachmentMime;
+            this.inspector.url = this.form.attachmentUrl;
+            this.showInspector = true;
         },
 
         removeAttachment() {
@@ -539,7 +781,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         addRow() {
-            this.form.rows.push({ account: '', debet: 0, kredit: 0 });
+            this.form.rows.push({ _key: Date.now(), account: '', debet: 0, kredit: 0 });
         },
 
         removeRow(index) {
@@ -591,12 +833,24 @@ document.addEventListener('alpine:init', () => {
         async submitPost() {
             if (this.showSettings || this.showKontoplan || this.showMoms) return;
 
+            if (!this.form.date || !this.form.text) {
+                this.showToast('Datum och text är obligatoriskt', 'error');
+                return;
+            }
+
+            const fy = this.activeFiscalYear;
+            if (fy && (this.form.date < fy.start_date || this.form.date > fy.end_date)) {
+                this.formDateError = 'Datumet ligger utanför det aktiva räkenskapsåret';
+                return;
+            }
+            this.formDateError = '';
+
             if (this.diff !== 0) {
                 this.showToast('Verifikationen balanserar inte!', 'error');
                 return;
             }
-            if (!this.form.date || !this.form.text) {
-                this.showToast('Datum och text är obligatoriskt', 'error');
+            if (this.totalDebet <= 0) {
+                this.showToast('Du måste ange ett belopp över 0 kronor', 'error');
                 return;
             }
 
@@ -620,16 +874,20 @@ document.addEventListener('alpine:init', () => {
 
                 if (res.ok) {
                     this.showToast('Bokförd!', 'success');
+                    
+                    // Uppdatera dashboard lokalt
+                    this.updateDashboardLocally(validRows);
+                    
                     // Reset form
                     this.form.text = '';
                     this.removeAttachment();
                     this.form.rows = [
-                        { account: '1930', debet: 0, kredit: 0 },
-                        { account: '3010', debet: 0, kredit: 0 }
+                        { _key: Date.now() + 1, account: '1930', debet: 0, kredit: 0 },
+                        { _key: Date.now() + 2, account: '3010', debet: 0, kredit: 0 }
                     ];
                     this.showInspector = false;
-                    this.fetchVerifications();
-                    this.runVerification();
+                    await this.fetchVerifications();
+                    await this.runVerification();
                 } else {
                     const err = await res.json();
                     this.showToast('Fel: ' + err.error, 'error');
@@ -642,6 +900,17 @@ document.addEventListener('alpine:init', () => {
         showToast(msg, type) {
             this.toast = { msg, type };
             setTimeout(() => { this.toast = null; }, 3000);
+        },
+
+        copyBugLog() {
+            navigator.clipboard.writeText(this.bugLog.join('\n'));
+            this.showToast('Logg kopierad', 'success');
+        },
+
+        clearBugLog() {
+            this.bugLog = [];
+            this.showBugLogger = false;
+            this.showToast('Logg rensad', 'success');
         }
     }));
 });

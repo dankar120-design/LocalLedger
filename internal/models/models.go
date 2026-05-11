@@ -9,6 +9,7 @@ type Account struct {
 type VerificationRequest struct {
 	Date             string
 	Text             string
+	Type             string // 'NORMAL', 'IB', 'MAKULERAD' etc.
 	AttachmentBase64 string
 	Rows             []RowRequest
 }
@@ -29,6 +30,7 @@ type VerificationResponse struct {
 	CreatedAt      string        `json:"created_at"`
 	Date           string        `json:"date"`
 	Text           string        `json:"text"`
+	Type           string        `json:"type"`
 	Hash           *string       `json:"hash,omitempty"`
 	IsStornoed     bool          `json:"is_stornoed"`
 	StornoRefID    *int64        `json:"storno_ref_id,omitempty"`

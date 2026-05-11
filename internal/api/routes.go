@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -11,6 +12,8 @@ import (
 
 	"localledger/internal/ledger"
 	"localledger/internal/models"
+
+	"github.com/xuri/excelize/v2"
 )
 
 // registerRoutes sätter upp alla HTTP handlers för API:et
@@ -28,6 +31,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/maintenance/seal", s.handleSealVerifications)
 	mux.HandleFunc("GET /api/attachments/{hash}", s.handleGetAttachment)
 	mux.HandleFunc("GET /api/reports/samlingsplan", s.handleGetSamlingsplan)
+	mux.HandleFunc("GET /api/reports/financial", s.handleGetFinancialJSON)
+	mux.HandleFunc("GET /api/reports/excel", s.handleGetFinancialExcel)
 	mux.HandleFunc("GET /api/accounts", s.handleGetAccounts)
 	mux.HandleFunc("GET /reports", s.handleGetReports)
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
@@ -35,8 +40,11 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/accounts", s.handleAddAccount)
 	mux.HandleFunc("GET /api/export/sie4", s.handleExportSIE4)
 	mux.HandleFunc("GET /api/export/backup", s.handleExportBackup)
+	mux.HandleFunc("POST /api/import/backup", s.handleRestoreBackup)
 	mux.HandleFunc("GET /api/vat-report", s.handleGetVatReport)
 	mux.HandleFunc("POST /api/vat-report/transfer", s.handleTransferVat)
+	mux.HandleFunc("POST /api/import/sie4", s.handleImportSIE4)
+	mux.HandleFunc("POST /api/fiscal-years/{id}/generate-ib", s.handleGenerateIB)
 }
 
 // ErrorResponse är standardformatet för felmeddelanden
@@ -362,6 +370,13 @@ func (s *Server) handleGetReports(w http.ResponseWriter, r *http.Request) {
 		"money": func(v int64) string {
 			return fmt.Sprintf("%.2f", float64(v)/100.0)
 		},
+		"json": func(v interface{}) template.JS {
+			b, err := json.Marshal(v)
+			if err != nil {
+				return template.JS("null")
+			}
+			return template.JS(b)
+		},
 	}
 
 	tmpl, err := template.New("reports.html").Funcs(funcMap).ParseFiles("frontend/views/reports.html")
@@ -376,6 +391,141 @@ func (s *Server) handleGetReports(w http.ResponseWriter, r *http.Request) {
 	if err := tmpl.Execute(w, report); err != nil {
 		fmt.Printf("Template execute error: %v\n", err)
 	}
+}
+
+func (s *Server) handleGetFinancialJSON(w http.ResponseWriter, r *http.Request) {
+	yearIDStr := r.URL.Query().Get("year_id")
+	var yearID *int64
+	if yearIDStr != "" {
+		if id, err := strconv.ParseInt(yearIDStr, 10, 64); err == nil {
+			yearID = &id
+		}
+	}
+
+	report, err := s.ledger.GetFinancialReport(yearID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(report)
+}
+
+func (s *Server) handleGetFinancialExcel(w http.ResponseWriter, r *http.Request) {
+	yearIDStr := r.URL.Query().Get("year_id")
+	var yearID *int64
+	if yearIDStr != "" {
+		if id, err := strconv.ParseInt(yearIDStr, 10, 64); err == nil {
+			yearID = &id
+		}
+	}
+
+	report, err := s.ledger.GetFinancialReport(yearID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	f := excelize.NewFile()
+	defer f.Close()
+
+	sheet := "Finansiell Rapport"
+	f.SetSheetName("Sheet1", sheet)
+
+	// Kolumnbredder
+	f.SetColWidth(sheet, "A", "A", 15)
+	f.SetColWidth(sheet, "B", "B", 40)
+	f.SetColWidth(sheet, "C", "C", 20)
+
+	// Styles
+	titleStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 14},
+	})
+	headerStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Color: "#FFFFFF"},
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#3B82F6"}, Pattern: 1},
+	})
+	moneyFormat := "#,##0.00 \"kr\""
+	moneyStyle, _ := f.NewStyle(&excelize.Style{
+		CustomNumFmt: &moneyFormat,
+	})
+	boldMoneyStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true},
+		CustomNumFmt: &moneyFormat,
+	})
+	boldStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true},
+	})
+
+	row := 1
+	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "Finansiell Rapport")
+	f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), titleStyle)
+	row++
+	f.SetCellValue(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("Räkenskapsår: %s", report.FiscalYear))
+	row += 2
+
+	writeHeader := func(title string) {
+		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), title)
+		f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("C%d", row), headerStyle)
+		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), "Beskrivning")
+		f.SetCellValue(sheet, fmt.Sprintf("C%d", row), "Belopp (SEK)")
+		row++
+	}
+
+	writeRow := func(code, name string, balance int64) {
+		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), code)
+		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), name)
+		f.SetCellValue(sheet, fmt.Sprintf("C%d", row), float64(balance)/100.0)
+		f.SetCellStyle(sheet, fmt.Sprintf("C%d", row), fmt.Sprintf("C%d", row), moneyStyle)
+		row++
+	}
+
+	writeTotal := func(title string, total int64) {
+		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), title)
+		f.SetCellStyle(sheet, fmt.Sprintf("B%d", row), fmt.Sprintf("B%d", row), boldStyle)
+		f.SetCellValue(sheet, fmt.Sprintf("C%d", row), float64(total)/100.0)
+		f.SetCellStyle(sheet, fmt.Sprintf("C%d", row), fmt.Sprintf("C%d", row), boldMoneyStyle)
+		row++
+	}
+
+	// Resultaträkning
+	writeHeader("Intäkter")
+	for _, acc := range report.Income {
+		writeRow(acc.AccountCode, acc.AccountName, acc.Balance)
+	}
+	writeTotal("Summa Intäkter:", report.TotalIncome)
+	row++
+
+	writeHeader("Kostnader")
+	for _, acc := range report.Expenses {
+		writeRow(acc.AccountCode, acc.AccountName, acc.Balance)
+	}
+	writeTotal("Summa Kostnader:", report.TotalExpenses)
+	row++
+
+	writeTotal("Årets Resultat:", report.NetIncome)
+	row += 2
+
+	// Balansräkning
+	writeHeader("Tillgångar")
+	for _, acc := range report.Assets {
+		writeRow(acc.AccountCode, acc.AccountName, acc.Balance)
+	}
+	writeTotal("Summa Tillgångar:", report.TotalAssets)
+	row++
+
+	writeHeader("Skulder & Eget Kapital")
+	for _, acc := range report.Liabilities {
+		writeRow(acc.AccountCode, acc.AccountName, acc.Balance)
+	}
+	writeTotal("Summa Skulder:", report.TotalLiabilities)
+	writeTotal("Årets Resultat:", report.NetIncome)
+	writeTotal("Summa Skulder & Eget Kapital:", report.CalculatedEquity)
+
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"LocalLedger_Rapport_%s.xlsx\"", report.FiscalYear))
+	f.WriteTo(w)
 }
 
 // handleAddAccount hanterar skapandet av ett nytt konto.
@@ -445,4 +595,74 @@ func (s *Server) handleExportSIE4(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "attachment; filename=\"export.se\"")
 	w.WriteHeader(http.StatusOK)
 	w.Write(sieData)
+}
+
+func (s *Server) handleImportSIE4(w http.ResponseWriter, r *http.Request) {
+	user := "API User"
+
+	// Läs yearID från form-data eller query
+	yearIDStr := r.URL.Query().Get("yearID")
+	if yearIDStr == "" {
+		yearIDStr = r.FormValue("yearID")
+	}
+
+	yearID, err := strconv.ParseInt(yearIDStr, 10, 64)
+	if err != nil {
+		writeError(w, fmt.Errorf("%w: Ogiltigt yearID", ledger.ErrValidation))
+		return
+	}
+
+	err = r.ParseMultipartForm(10 << 20) // 10 MB max memory
+	if err != nil {
+		writeError(w, fmt.Errorf("%w: failed to parse multipart form: %v", ledger.ErrValidation, err))
+		return
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, fmt.Errorf("%w: missing file field", ledger.ErrValidation))
+		return
+	}
+	defer file.Close()
+
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		writeError(w, fmt.Errorf("failed to read file: %w", err))
+		return
+	}
+
+	if err := s.ledger.ImportSIE4(user, yearID, fileBytes); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"success"}`))
+}
+
+func (s *Server) handleGenerateIB(w http.ResponseWriter, r *http.Request) {
+	user := "API User"
+
+	idStr := r.PathValue("id")
+	toYearID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, fmt.Errorf("%w: ogiltigt toYearID", ledger.ErrValidation))
+		return
+	}
+
+	var req struct {
+		FromYearID int64 `json:"from_year_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("%w: ogiltig JSON", ledger.ErrValidation))
+		return
+	}
+
+	if err := s.ledger.GenerateOpeningBalance(user, req.FromYearID, toYearID); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"success"}`))
 }

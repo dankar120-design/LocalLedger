@@ -194,7 +194,11 @@ func (l *Ledger) postVerificationTx(tx *sql.Tx, user string, req models.Verifica
 	// Huvudpost med RETURNING
 	var vid int64
 	var createdAt string
-	err = tx.QueryRow("INSERT INTO verifications (date, text, hash, attachment_hash, attachment_mime) VALUES (?, ?, NULL, ?, ?) RETURNING id, created_at", req.Date, req.Text, attachmentHash, attachmentMime).Scan(&vid, &createdAt)
+	vType := req.Type
+	if vType == "" {
+		vType = "NORMAL"
+	}
+	err = tx.QueryRow("INSERT INTO verifications (date, text, type, hash, attachment_hash, attachment_mime) VALUES (?, ?, ?, NULL, ?, ?) RETURNING id, created_at", req.Date, req.Text, vType, attachmentHash, attachmentMime).Scan(&vid, &createdAt)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to insert verification: %w", err)
 	}
@@ -229,7 +233,7 @@ func (l *Ledger) GetVerifications(yearID *int64) ([]models.VerificationResponse,
 	
 	baseQuery := `
 		SELECT 
-			v.id, v.created_at, v.date, v.text, v.hash, v.storno_ref_id, v.attachment_hash, v.attachment_mime,
+			v.id, v.created_at, v.date, v.text, v.type, v.hash, v.storno_ref_id, v.attachment_hash, v.attachment_mime,
 			EXISTS(SELECT 1 FROM verifications WHERE storno_ref_id = v.id) as is_stornoed,
 			r.id, r.account, r.debet, r.kredit
 		FROM verifications v
@@ -262,7 +266,7 @@ func (l *Ledger) GetVerifications(yearID *int64) ([]models.VerificationResponse,
 
 	for rows.Next() {
 		var vID int64
-		var vCreatedAt, vDate, vText string
+		var vCreatedAt, vDate, vText, vType string
 		var vHash, vAttachmentHash, vAttachmentMime sql.NullString
 		var vStornoRefID sql.NullInt64
 		var vIsStornoed bool
@@ -272,7 +276,7 @@ func (l *Ledger) GetVerifications(yearID *int64) ([]models.VerificationResponse,
 		var rDebet, rKredit sql.NullInt64
 
 		err := rows.Scan(
-			&vID, &vCreatedAt, &vDate, &vText, &vHash, &vStornoRefID, &vAttachmentHash, &vAttachmentMime, &vIsStornoed,
+			&vID, &vCreatedAt, &vDate, &vText, &vType, &vHash, &vStornoRefID, &vAttachmentHash, &vAttachmentMime, &vIsStornoed,
 			&rID, &rAccount, &rDebet, &rKredit,
 		)
 		if err != nil {
@@ -313,6 +317,7 @@ func (l *Ledger) GetVerifications(yearID *int64) ([]models.VerificationResponse,
 				CreatedAt:      vCreatedAt,
 				Date:           vDate,
 				Text:           vText,
+				Type:           vType,
 				Hash:           hashPtr,
 				IsStornoed:     vIsStornoed,
 				StornoRefID:    stornoRefPtr,
