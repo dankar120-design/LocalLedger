@@ -7,13 +7,16 @@
     <!-- Säker DOM-injektion från servern -->
     <meta name="api-token" content="{{.Token}}">
     
+    <!-- FOUC Preventer -->
+    <script>document.documentElement.dataset.theme = localStorage.getItem('theme') || 'dark';</script>
+
     <link rel="stylesheet" href="/static/css/style.css">
     
     <!-- Ladda logik och ramverk lokalt -->
     <script defer src="/static/js/app.js"></script>
     <script defer src="/static/js/alpine.min.js"></script>
 </head>
-<body x-data="ledgerApp()">
+<body x-data="{ ...ledgerApp(), theme: localStorage.getItem('theme') || 'dark' }" :data-theme="theme" x-init="$watch('theme', val => localStorage.setItem('theme', val))">
 
     <!-- Sidebar -->
     <aside class="sidebar">
@@ -40,9 +43,14 @@
             ⏻ Stäng av systemet
         </button>
         
-        <div style="margin-top: auto; padding-top: 1.5rem; font-size: 0.75rem; color: var(--text-muted); opacity: 0.8; line-height: 1.4;">
+        <!-- Theme Toggle (Kompakt) -->
+        <div class="theme-toggle" @click="theme = theme === 'dark' ? 'light' : 'dark'" title="Byt tema">
+            <span x-text="theme === 'dark' ? '☀️' : '🌙'" style="font-size: 1.2rem;"></span>
+        </div>
+
+        <div style="margin-top: 1.5rem; padding-top: 1.5rem; font-size: 0.75rem; color: var(--text-muted); opacity: 0.8; line-height: 1.4; border-top: 1px solid var(--border);">
             <strong>Ansvarsfriskrivning</strong><br>
-            LocalLedger tillhandahålls i befintligt skick. Du ansvarar själv för att din bokföring följer BFL. Utvecklaren tar inget ansvar för eventuella fel eller skattetillägg.
+            LocalLedger tillhandahålls i befintligt skick.
         </div>
     </aside>
 
@@ -176,7 +184,28 @@
         <section class="panel" x-show="!showSettings && !showKontoplan && !showMoms">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <input type="text" x-model="searchQuery" placeholder="Sök konto, text, ID..." style="max-width: 300px;">
-                <button class="secondary" @click="sealVerifications()" title="Låser alla utkast äldre än 24h manuellt">🔒 Lås WORM-kedja</button>
+                <button class="primary" style="background: var(--danger); box-shadow: 0 4px 12px rgba(248, 113, 113, 0.3);" @click="showSealModal = true" title="Låser alla utkast äldre än 24h manuellt">🔒 WORM-Försegla Utkast</button>
+            </div>
+            
+            <!-- Irreversibel Friction Modal -->
+            <div x-show="showSealModal" @keydown.escape.window="if(showSealModal) showSealModal = false" tabindex="-1" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999;" x-cloak>
+                <div class="panel" style="max-width: 500px; width: 100%; border: 1px solid var(--danger); box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+                    <h2 style="color: var(--danger); display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+                        ⚠️ Kritiskt Vägval
+                    </h2>
+                    <p style="margin-bottom: 1rem; color: var(--text-main); line-height: 1.5;">
+                        Du är på väg att <strong>kryptografiskt WORM-försegla</strong> alla obokförda utkast som är äldre än 24 timmar.
+                    </p>
+                    <p style="margin-bottom: 1.5rem; color: var(--text-muted); font-size: 0.9rem; line-height: 1.5;">
+                        Denna handling är <strong>irreversibel</strong> enligt Bokföringslagen. En hashad verifikation kan aldrig mer raderas eller ändras, endast korrigeras via en spårbar storno-verifikation.
+                    </p>
+                    <div style="display: flex; gap: 1rem; justify-content: flex-end; padding-top: 1rem; border-top: 1px solid var(--border);">
+                        <button @click="showSealModal = false" autofocus>Avbryt</button>
+                        <button class="primary" style="background: var(--danger);" :disabled="isSealing" @click="isSealing = true; await sealVerifications(); showSealModal = false; isSealing = false">
+                            <span x-text="isSealing ? 'Förseglar...' : 'Jag förstår, försegla nu'"></span>
+                        </button>
+                    </div>
+                </div>
             </div>
             <table>
                 <thead>
@@ -184,8 +213,8 @@
                         <th>ID</th>
                         <th>Datum</th>
                         <th>Beskrivning</th>
-                        <th>Kontering</th>
-                        <th>Hash (WORM)</th>
+                        <th>Belopp (D/K)</th>
+                        <th>Integritet</th>
                         <th>Åtgärd</th>
                     </tr>
                 </thead>
@@ -211,8 +240,9 @@
                                 </ul>
                             </td>
                             <td class="hash-cell">
-                                <span x-show="!v.hash" title="Utkast (Ej kryptografiskt låst)">📝 Utkast</span>
-                                <span x-show="v.hash" title="Kryptografiskt låst (WORM)">🔒 <span x-text="v.hash ? v.hash.substring(0, 16) + '...' : ''"></span></span>
+                                <span class="badge-draft" x-show="!v.hash" title="Utkast (Ej kryptografiskt låst)">Utkast (Oskyddad)</span>
+                                <span class="badge-worm" x-show="v.hash" title="Kryptografiskt låst (WORM)">🔒 WORM Secured</span>
+                                <div x-show="v.hash" style="font-size: 0.65rem; margin-top: 4px; opacity: 0.7;" x-text="v.hash.substring(0, 16) + '...'"></div>
                                 <template x-if="v.attachment_hash">
                                     <div style="margin-top: 0.25rem;">
                                         <a :href="'/api/attachments/' + v.attachment_hash" target="_blank" style="font-size: 0.8rem; text-decoration: none; color: var(--primary);">📎 Visa Kvitto</a>

@@ -12,6 +12,8 @@ document.addEventListener('alpine:init', () => {
         showSettings: false,
         showKontoplan: false,
         showMoms: false,
+        showSealModal: false,
+        isSealing: false,
         vatReport: null,
         vatStartDate: '',
         vatEndDate: '',
@@ -377,7 +379,6 @@ document.addEventListener('alpine:init', () => {
         },
 
         async sealVerifications() {
-            if (!confirm('Vill du låsa alla utkast kryptografiskt? Denna åtgärd kan inte ångras och krävs enligt Bokföringslagen.')) return;
             try {
                 const res = await this.authFetch('/api/maintenance/seal', { method: 'POST' });
                 if (res.ok) {

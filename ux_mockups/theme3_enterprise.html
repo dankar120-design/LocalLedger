@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalLedger - Enterprise</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f3f4f6;
+            --surface: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --primary: #4f46e5; /* Indigo */
+            --border: #e5e7eb;
+            --radius: 8px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Roboto', sans-serif; background: var(--bg); color: var(--text-main); }
+        
+        /* Top Navigation */
+        header.topbar {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 0 40px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .logo { font-size: 1.2rem; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+        .logo-icon { width: 24px; height: 24px; background: var(--primary); border-radius: 4px; display: inline-block; }
+        nav { display: flex; gap: 24px; height: 100%; }
+        nav a { 
+            text-decoration: none; 
+            color: var(--text-muted); 
+            font-weight: 500; 
+            display: flex; 
+            align-items: center; 
+            border-bottom: 2px solid transparent; 
+            transition: all 0.2s; 
+        }
+        nav a:hover { color: var(--text-main); }
+        nav a.active { color: var(--primary); border-bottom-color: var(--primary); }
+        
+        /* Main Layout */
+        .container { max-width: 1200px; margin: 40px auto; padding: 0 20px; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        h1 { font-size: 1.5rem; font-weight: 500; }
+        .btn-primary { 
+            background: var(--primary); 
+            color: white; 
+            border: none; 
+            padding: 8px 16px; 
+            border-radius: var(--radius); 
+            font-weight: 500; 
+            cursor: pointer; 
+            box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
+        }
+        .btn-primary:hover { background: #4338ca; }
+        
+        /* Grid Layout for Dashboard */
+        .dashboard-grid { display: grid; grid-template-columns: 250px 1fr; gap: 24px; align-items: start;}
+        
+        /* Filter Panel */
+        .filter-panel { background: var(--surface); padding: 20px; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .filter-group { margin-bottom: 16px; }
+        .filter-group label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; font-weight: 500;}
+        .filter-group select, .filter-group input { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit;}
+        
+        /* Data Table */
+        .card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { padding: 12px 20px; font-size: 0.8rem; color: var(--text-muted); font-weight: 500; border-bottom: 1px solid var(--border); background: #f9fafb; text-transform: uppercase;}
+        td { padding: 16px 20px; border-bottom: 1px solid var(--border); font-size: 0.95rem; }
+        tr:last-child td { border-bottom: none; }
+        
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 500; }
+        .badge-draft { background: #fee2e2; color: #991b1b; }
+        .badge-worm { background: #e0e7ff; color: #3730a3; }
+        
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="logo"><span class="logo-icon"></span> LocalLedger</div>
+        <nav>
+            <a href="#">Översikt</a>
+            <a href="#" class="active">Verifikationer</a>
+            <a href="#">Rapporter</a>
+            <a href="#">Inställningar</a>
+        </nav>
+        <div>
+            <img src="https://ui-avatars.com/api/?name=Admin&background=f3f4f6" alt="User" style="width: 32px; border-radius: 50%;">
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="page-header">
+            <h1>Verifikationer</h1>
+            <button class="btn-primary">Skapa ny</button>
+        </div>
+        
+        <div class="dashboard-grid">
+            <aside class="filter-panel">
+                <div class="filter-group">
+                    <label>Räkenskapsår</label>
+                    <select><option>2026</option><option>2025</option></select>
+                </div>
+                <div class="filter-group">
+                    <label>Sök</label>
+                    <input type="text" placeholder="Sök text, konto...">
+                </div>
+            </aside>
+            
+            <main class="card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Ver.nr</th>
+                            <th>Datum</th>
+                            <th>Text</th>
+                            <th>Omslutning</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>V-3</td>
+                            <td>2026-03-15</td>
+                            <td>Inköp Kontorsmaterial</td>
+                            <td>1 250,00</td>
+                            <td><span class="badge badge-draft">Utkast</span></td>
+                        </tr>
+                        <tr>
+                            <td>V-2</td>
+                            <td>2026-02-10</td>
+                            <td>Konsultarvode</td>
+                            <td>25 000,00</td>
+                            <td><span class="badge badge-worm">WORM-Förseglad</span></td>
+                        </tr>
+                        <tr>
+                            <td>V-1</td>
+                            <td>2026-01-01</td>
+                            <td>Ingående Balans</td>
+                            <td>0,00</td>
+                            <td><span class="badge badge-worm">WORM-Förseglad</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </main>
+        </div>
+    </div>
+</body>
+</html>
