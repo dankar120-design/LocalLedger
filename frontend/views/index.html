@@ -96,16 +96,28 @@
         <section class="panel" x-show="!showSettings && !showKontoplan && !(fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked)" @keydown.window.ctrl.enter.prevent="submitPost()">
             <h2 style="margin-bottom: 1rem; font-size: 1.1rem;">Ny Verifikation</h2>
 
-            <div style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; background-color: rgba(59, 130, 246, 0.1); padding: 10px 15px; border-radius: 6px; border: 1px solid rgba(59, 130, 246, 0.3);">
+            <div class="magic-wand-container">
                 <span style="font-size: 1.5rem;">🪄</span>
-                <div style="flex-grow: 1;">
+                
+                <!-- Steg 1: Välj mall -->
+                <div style="flex-grow: 1;" x-show="!templatePrompt.active">
                     <strong style="display: block; font-size: 0.9rem; color: var(--accent); margin-bottom: 4px;">Trollstaven (Snabbmallar)</strong>
-                    <select x-model="selectedTemplate" @change="applyTemplate()" style="width: 100%; padding: 8px; border-radius: 4px; background: var(--bg); color: var(--text); border: 1px solid var(--border); cursor: pointer;">
+                    <select x-model="selectedTemplate" @change="initiateTemplate()" style="width: 100%; padding: 8px; border-radius: 4px; background: var(--bg); color: var(--text); border: 1px solid var(--border); cursor: pointer;">
                         <option value="">-- Välj en händelse för att autofylla --</option>
                         <template x-for="t in templates" :key="t.id">
                             <option :value="t.id" x-text="t.name"></option>
                         </template>
                     </select>
+                </div>
+
+                <!-- Steg 2: Ange belopp -->
+                <div style="flex-grow: 1; display: flex; align-items: flex-end; gap: 0.5rem;" x-show="templatePrompt.active" x-cloak>
+                    <div style="flex-grow: 1;">
+                        <strong style="display: block; font-size: 0.9rem; color: var(--accent); margin-bottom: 4px;">Ange totalbelopp inkl. eventuell moms (kr)</strong>
+                        <input type="number" x-ref="templateAmountInput" x-model="templatePrompt.amount" @keydown.enter.prevent="applyTemplateAmount()" @keydown.escape.prevent="cancelTemplate()" placeholder="T.ex. 1250" style="width: 100%; padding: 8px; border-radius: 4px; background: var(--bg-body); color: var(--text-main); border: 1px solid rgba(255, 255, 255, 0.25);">
+                    </div>
+                    <button class="primary" @click="applyTemplateAmount()" style="padding: 8px 16px;">Tillämpa</button>
+                    <button class="icon-btn" @click="cancelTemplate()" style="padding: 8px;" title="Avbryt (Esc)">❌</button>
                 </div>
             </div>
             
@@ -116,7 +128,7 @@
                 </div>
                 <div class="form-group">
                     <label>Beskrivning</label>
-                    <input type="text" x-model="form.text" class="numpad-nav" @keydown.enter.prevent="focusNext($event)" placeholder="T.ex. Inköp av dator">
+                    <input type="text" x-ref="formDesc" x-model="form.text" class="numpad-nav" @keydown.enter.prevent="focusNext($event)" placeholder="T.ex. Inköp av dator">
                 </div>
             </div>
 
@@ -124,8 +136,7 @@
                  @dragover.prevent="$el.classList.add('dragover')" 
                  @dragleave.prevent="$el.classList.remove('dragover')" 
                  @drop.prevent="$el.classList.remove('dragover'); handleFileDrop($event)"
-                 @click="$refs.fileInput.click()"
-                 style="border: 2px dashed var(--border-color); padding: 1.5rem; text-align: center; border-radius: 4px; margin-bottom: 1.5rem; cursor: pointer; transition: all 0.2s;">
+                 @click="$refs.fileInput.click()">
                 
                 <input type="file" x-ref="fileInput" @change="handleFileDrop" style="display: none" accept=".pdf,image/png,image/jpeg">
                 

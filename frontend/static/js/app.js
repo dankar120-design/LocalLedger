@@ -63,42 +63,55 @@ document.addEventListener('alpine:init', () => {
             }
         ],
         selectedTemplate: '',
+        templatePrompt: { active: false, templateId: '', amount: '' },
 
-        applyTemplate() {
+        initiateTemplate() {
             if (!this.selectedTemplate) return;
-            
-            const t = this.templates.find(x => x.id === this.selectedTemplate);
+            this.templatePrompt.templateId = this.selectedTemplate;
+            this.templatePrompt.active = true;
             this.selectedTemplate = ''; // Återställ dropdown direkt
+            this.$nextTick(() => {
+                if(this.$refs.templateAmountInput) {
+                    this.$refs.templateAmountInput.focus();
+                }
+            });
+        },
+
+        cancelTemplate() {
+            this.templatePrompt.active = false;
+            this.templatePrompt.templateId = '';
+            this.templatePrompt.amount = '';
+        },
+
+        applyTemplateAmount() {
+            if (!this.templatePrompt.amount) {
+                this.cancelTemplate();
+                return;
+            }
             
+            const t = this.templates.find(x => x.id === this.templatePrompt.templateId);
             if (!t) return;
             
-            const inputStr = window.prompt(`Ange totalbelopp inkl. eventuell moms för "${t.name}" (kr):`);
-            if (!inputStr) return; // Användaren avbröt
-            
-            // Hantera komma och punkt
-            const cleaned = inputStr.replace(',', '.').replace(/ /g, '');
+            const cleaned = this.templatePrompt.amount.toString().replace(',', '.').replace(/ /g, '');
             const amountFloat = parseFloat(cleaned);
             if (isNaN(amountFloat) || amountFloat <= 0) {
                 this.showToast("Ogiltigt belopp", "error");
                 return;
             }
             
-            // Remainder-metoden (räkna i ören)
             const totalOren = Math.round(amountFloat * 100);
             
             let vatOren = 0;
             let baseOren = totalOren;
             
             if (t.vatRate > 0) {
-                // Momssumma baklänges = Total * (moms / (1 + moms))
                 const vatFraction = t.vatRate / (1 + t.vatRate);
                 vatOren = Math.round(totalOren * vatFraction);
                 baseOren = totalOren - vatOren;
             }
             
-            // Skapa raderna
             if (!this.form.text) this.form.text = t.desc;
-            this.form.rows = []; // Rensa befintliga
+            this.form.rows = []; 
             
             if (t.type === 'expense') {
                 this.form.rows.push({ account: t.accountTotal, debet: 0, kredit: totalOren / 100 });
@@ -116,7 +129,15 @@ document.addEventListener('alpine:init', () => {
                 this.form.rows.push({ account: t.accountBase, debet: totalOren / 100, kredit: 0 });
             }
             
+            this.cancelTemplate();
             this.showToast("Mall tillämpad", "success");
+            
+            this.$nextTick(() => {
+                if (this.$refs.formDesc) {
+                    this.$refs.formDesc.focus();
+                    if (typeof this.$refs.formDesc.select === 'function') this.$refs.formDesc.select();
+                }
+            });
         },
         
         form: {

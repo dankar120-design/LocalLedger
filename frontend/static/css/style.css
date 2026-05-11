@@ -260,6 +260,18 @@ tr:hover td {
   color: var(--danger);
 }
 
+/* Magic Wand (Trollstaven) */
+.magic-wand-container {
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background-color: rgba(59, 130, 246, 0.1);
+  padding: 10px 15px;
+  border-radius: 6px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
 /* Buttons */
 button {
   background-color: transparent;
