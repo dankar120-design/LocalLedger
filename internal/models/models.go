@@ -84,3 +84,10 @@ type CompanySettings struct {
 	Name      string `json:"name"`
 	OrgNumber string `json:"org_number"`
 }
+
+type DashboardMetrics struct {
+	BankBalance int64 `json:"bank_balance"` // Summan av alla konton som börjar på 19 (tillgångar)
+	NetIncome   int64 `json:"net_income"`   // Årets resultat (Intäkter - Kostnader)
+	Income      int64 `json:"income"`       // Endast intäkter för presentation
+	Expenses    int64 `json:"expenses"`     // Endast kostnader för presentation
+}

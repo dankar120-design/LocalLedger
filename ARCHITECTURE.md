@@ -42,7 +42,8 @@ examples/
 | `internal/sie` | **Import/Export (SIE-4)**. Bygger och tolkar SIE-filer. Tvingar **CP437 (IBM PC8)** kodning enligt standard. Bidirektionell: Konverterar från UTF-8 till CP437 vid export, och tvärtom vid import (Typ 4I). | `internal/ledger`, `internal/models` |
 | `internal/reports` | **Analys och Utskrift**. Genererar balansräkning, resultaträkning och kvittokopior till PDF/Excel. | `internal/ledger`, `internal/models` |
 | `internal/storage` | **Kryptografisk Underlagshantering (WORM)**. Tar emot kvitton, beräknar en SHA-256 hash och lagrar filen lokalt med en OS-readonly-flagga inuti aktuell Company Workspace. | `internal/models`, OS fs |
-| `internal/api` | **Klientgränssnitt**. Exponerar systemet för webbklienten (JSON REST API). Inga legala domänbeslut fattas här. | `internal/ledger`, `internal/sie`, `internal/storage`, `internal/reports` |
+| `internal/api` | **Klientgränssnitt**. Exponerar systemet för webbklienten (JSON REST API). Inga legala domänbeslut fattas här. Serverar även Dashboard-aggregeringar. | `internal/ledger`, `internal/sie`, `internal/storage`, `internal/reports` |
+| `frontend/views` | **Användargränssnitt (Alpine.js)**. Tillhandahåller reaktivitet och UX-mönster (Dark Mode, Toasts, Modaler) via Vanilla CSS, isolerad från databaslagret. | `internal/api` |
 
 ## 🔄 Kritiska Logiska Flöden (BFL-Compliant)
 

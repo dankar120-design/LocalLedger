@@ -154,3 +154,33 @@ func (l *Ledger) GetAccounts() ([]models.Account, error) {
 	
 	return accounts, nil
 }
+
+// GetDistinctVendors hämtar alla unika beskrivningar (vendors) från tidigare verifikationer,
+// filtrerar bort tomma strängar och korta strängar (< 4 tecken).
+func (l *Ledger) GetDistinctVendors() ([]string, error) {
+	query := `
+		SELECT DISTINCT text 
+		FROM verifications 
+		WHERE text != '' AND length(text) >= 4
+	`
+	rows, err := l.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query distinct vendors: %w", err)
+	}
+	defer rows.Close()
+
+	var vendors []string
+	for rows.Next() {
+		var vendor string
+		if err := rows.Scan(&vendor); err != nil {
+			return nil, fmt.Errorf("failed to scan vendor: %w", err)
+		}
+		vendors = append(vendors, vendor)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error in GetDistinctVendors: %w", err)
+	}
+
+	return vendors, nil
+}

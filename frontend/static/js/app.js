@@ -1,5 +1,6 @@
 document.addEventListener('alpine:init', () => {
     Alpine.data('ledgerApp', () => ({
+        theme: localStorage.getItem('theme') || 'dark',
         token: '',
         verifications: [],
         searchQuery: '',
@@ -20,8 +21,40 @@ document.addEventListener('alpine:init', () => {
         showBugLogger: false,
         isSealing: false,
         bugLog: [],
+        armedActionId: null,
+
+        confirmModal: { 
+            show: false, 
+            title: '', 
+            message: '', 
+            confirmLabel: 'Bekräfta',
+            isDangerous: false,
+            resolve: null 
+        },
+
+        confirmAction(message, title = 'Bekräfta', confirmLabel = 'Bekräfta', isDangerous = false) {
+            return new Promise((resolve) => {
+                if (this.confirmModal.resolve) {
+                    this.confirmModal.resolve(false);
+                }
+
+                this.confirmModal.title = title;
+                this.confirmModal.message = message;
+                this.confirmModal.confirmLabel = confirmLabel;
+                this.confirmModal.isDangerous = isDangerous;
+                this.confirmModal.resolve = resolve;
+                this.confirmModal.show = true;
+
+                this.$nextTick(() => {
+                    if (this.$refs.confirmBtn) this.$refs.confirmBtn.focus();
+                });
+            });
+        },
+        
         showDashboard: false,
-        dashboard: { income: 0, expenses: 0, net: 0, assets: 0 },
+        isScanningOcr: false,
+        ocrStatus: '',
+        dashboard: { income: 0, expenses: 0, net: 0, bank: 0 },
         vatReport: null,
         vatStartDate: '',
         vatEndDate: '',
@@ -122,19 +155,19 @@ document.addEventListener('alpine:init', () => {
             this.form.rows = []; 
             
             if (t.type === 'expense') {
-                this.form.rows.push({ account: t.accountTotal, debet: 0, kredit: totalOren / 100 });
-                if (vatOren > 0) this.form.rows.push({ account: t.accountVat, debet: vatOren / 100, kredit: 0 });
-                this.form.rows.push({ account: t.accountBase, debet: baseOren / 100, kredit: 0 });
+                this.form.rows.push({ _key: Date.now() + 1, account: t.accountTotal, debet: 0, kredit: totalOren / 100 });
+                if (vatOren > 0) this.form.rows.push({ _key: Date.now() + 2, account: t.accountVat, debet: vatOren / 100, kredit: 0 });
+                this.form.rows.push({ _key: Date.now() + 3, account: t.accountBase, debet: baseOren / 100, kredit: 0 });
             } else if (t.type === 'income') {
-                this.form.rows.push({ account: t.accountTotal, debet: totalOren / 100, kredit: 0 });
-                if (vatOren > 0) this.form.rows.push({ account: t.accountVat, debet: 0, kredit: vatOren / 100 });
-                this.form.rows.push({ account: t.accountBase, debet: 0, kredit: baseOren / 100 });
+                this.form.rows.push({ _key: Date.now() + 1, account: t.accountTotal, debet: totalOren / 100, kredit: 0 });
+                if (vatOren > 0) this.form.rows.push({ _key: Date.now() + 2, account: t.accountVat, debet: 0, kredit: vatOren / 100 });
+                this.form.rows.push({ _key: Date.now() + 3, account: t.accountBase, debet: 0, kredit: baseOren / 100 });
             } else if (t.type === 'transfer' && t.id === 'egen_insattning') {
-                this.form.rows.push({ account: t.accountTotal, debet: totalOren / 100, kredit: 0 });
-                this.form.rows.push({ account: t.accountBase, debet: 0, kredit: totalOren / 100 });
+                this.form.rows.push({ _key: Date.now() + 1, account: t.accountTotal, debet: totalOren / 100, kredit: 0 });
+                this.form.rows.push({ _key: Date.now() + 2, account: t.accountBase, debet: 0, kredit: totalOren / 100 });
             } else if (t.type === 'transfer' && t.id === 'eget_uttag') {
-                this.form.rows.push({ account: t.accountTotal, debet: 0, kredit: totalOren / 100 });
-                this.form.rows.push({ account: t.accountBase, debet: totalOren / 100, kredit: 0 });
+                this.form.rows.push({ _key: Date.now() + 1, account: t.accountTotal, debet: 0, kredit: totalOren / 100 });
+                this.form.rows.push({ _key: Date.now() + 2, account: t.accountBase, debet: totalOren / 100, kredit: 0 });
             }
             
             this.cancelTemplate();
@@ -241,7 +274,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async shutdownServer() {
-            if (!confirm("Vill du stänga av LocalLedger?")) return;
+            if (!await this.confirmAction("Vill du stänga av LocalLedger?", "Stäng av", "Stäng av", true)) return;
             try {
                 await this.authFetch('/api/shutdown', { method: 'POST' });
                 document.body.innerHTML = `
@@ -275,7 +308,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async createFiscalYear() {
-            if (!confirm("Är du säker på att du vill stänga detta år och föra över balanser till ett nytt räkenskapsår?")) return;
+            if (!await this.confirmAction("Är du säker på att du vill stänga detta år och föra över balanser till ett nytt räkenskapsår?", "Stäng år", "Stäng & Skapa nytt")) return;
             try {
                 const res = await this.authFetch('/api/fiscal-years', { method: 'POST' });
                 if (res.ok) {
@@ -294,7 +327,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async lockFiscalYear(id) {
-            if (!confirm("VARNING: Att låsa ett räkenskapsår är permanent. Inga fler ändringar eller makuleringar kan göras. Fortsätt?")) return;
+            if (!await this.confirmAction("VARNING: Att låsa ett räkenskapsår är permanent. Inga fler ändringar eller makuleringar kan göras. Fortsätt?", "Lås Räkenskapsår", "Lås året", true)) return;
             try {
                 const res = await this.authFetch(`/api/fiscal-years/${id}/lock`, { method: 'POST' });
                 if (res.ok) {
@@ -425,7 +458,6 @@ document.addEventListener('alpine:init', () => {
         },
 
         async stornoVerification(id) {
-            if (!confirm(`Vill du verkligen stornera verifikation A${id}? En ny rättelsepost kommer att skapas med dagens datum.`)) return;
             try {
                 const res = await this.authFetch(`/api/verifications/${id}/storno`, { method: 'POST' });
                 if (res.ok) {
@@ -442,7 +474,6 @@ document.addEventListener('alpine:init', () => {
         },
 
         async voidDraft(id) {
-            if (!confirm(`Vill du verkligen makulera utkast A${id}? Beloppen kommer att nollställas.`)) return;
             try {
                 const res = await this.authFetch(`/api/verifications/${id}/void`, { method: 'POST' });
                 if (res.ok) {
@@ -461,13 +492,13 @@ document.addEventListener('alpine:init', () => {
         async fetchDashboardData() {
             if (!this.activeFiscalYearId) return;
             try {
-                const res = await this.authFetch(`/api/reports/financial?year_id=${this.activeFiscalYearId}`);
+                const res = await this.authFetch(`/api/dashboard?year_id=${this.activeFiscalYearId}`);
                 if (!res.ok) return;
                 const data = await res.json();
-                this.dashboard.income = data.TotalIncome || 0;
-                this.dashboard.expenses = data.TotalExpenses || 0;
-                this.dashboard.net = data.NetIncome || 0;
-                this.dashboard.assets = data.TotalAssets || 0;
+                this.dashboard.income = data.income || 0;
+                this.dashboard.expenses = data.expenses || 0;
+                this.dashboard.net = data.net_income || 0;
+                this.dashboard.bank = data.bank_balance || 0;
             } catch (e) {
                 console.error("Kunde inte hämta dashboard-data", e);
             }
@@ -538,7 +569,7 @@ document.addEventListener('alpine:init', () => {
                 this.showToast('Finns inget att omföra (Nettot är 0).', 'error');
                 return;
             }
-            if (!confirm(`Är du säker? Detta skapar en verifikation som nollställer moms och därefter LÅSER alla månader i perioden (${this.vatStartDate} till ${this.vatEndDate}) för framtida ändringar.`)) return;
+            if (!await this.confirmAction(`Är du säker? Detta skapar en verifikation som nollställer moms och därefter LÅSER alla månader i perioden (${this.vatStartDate} till ${this.vatEndDate}) för framtida ändringar.`, 'Nollställ Moms', 'Bokför Moms', true)) return;
 
             try {
                 const res = await fetch('/api/vat-report/transfer', {
@@ -601,7 +632,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async fillGaps() {
-            if (!confirm('Vill du leta upp luckor i nummerserien och fylla dem med makuleringsposter (Enligt BFL)?')) return;
+            if (!await this.confirmAction('Vill du leta upp luckor i nummerserien och fylla dem med makuleringsposter (Enligt BFL)?', 'Laga Nummerserie', 'Laga')) return;
             try {
                 const res = await this.authFetch('/api/maintenance/fill-gaps', { method: 'POST' });
                 if (res.ok) {
@@ -652,7 +683,7 @@ document.addEventListener('alpine:init', () => {
             if (!files || files.length === 0) return;
             const file = files[0];
 
-            if (!confirm(`Är du säker på att du vill importera ${file.name} till det aktiva räkenskapsåret?`)) {
+            if (!await this.confirmAction(`Är du säker på att du vill importera ${file.name} till det aktiva räkenskapsåret?`, 'Importera SIE', 'Importera', true)) {
                 event.target.value = '';
                 return;
             }
@@ -688,7 +719,7 @@ document.addEventListener('alpine:init', () => {
             const fromYearID = parseInt(fromYearStr);
             if (isNaN(fromYearID)) return;
 
-            if (!confirm(`Ska vi överföra Utgående Balans från år ${fromYearID} som Ingående Balans till det valda aktiva året?`)) return;
+            if (!await this.confirmAction(`Ska vi överföra Utgående Balans från år ${fromYearID} som Ingående Balans till det valda aktiva året?`, 'Överför Balans', 'Överför')) return;
 
             try {
                 const res = await this.authFetch(`/api/fiscal-years/${this.activeYearID}/generate-ib`, {
@@ -734,7 +765,7 @@ document.addEventListener('alpine:init', () => {
             }
 
             const reader = new FileReader();
-            reader.onload = (event) => {
+            reader.onload = async (event) => {
                 const b64 = event.target.result.split(',')[1];
                 this.form.attachmentBase64 = b64;
                 this.form.attachmentName = file.name;
@@ -750,9 +781,187 @@ document.addEventListener('alpine:init', () => {
                 this.$nextTick(() => {
                     if (this.$refs.formDesc) this.$refs.formDesc.focus();
                 });
-                this.showToast("Bilaga bifogad: " + file.name, "success");
+                
+                // OCR-Spiken: Starta avläsning omedelbart efter uppladdning
+                await this.performOCR(file, event.target.result);
             };
             reader.readAsDataURL(file);
+        },
+
+        async performOCR(file, dataUrl) {
+            this.isScanningOcr = true;
+            this.ocrStatus = "Initierar OCR...";
+            
+            try {
+                let imgSource = dataUrl;
+                let finalRawText = "";
+                
+                if (file.type === 'application/pdf') {
+                    this.ocrStatus = "Analyserar PDF...";
+                    const buffer = await file.arrayBuffer();
+                    const pdfResult = await this.rasterizePDF(buffer);
+                    if (!pdfResult) throw new Error("Kunde inte läsa PDF.");
+                    
+                    if (pdfResult.isDirectText) {
+                        finalRawText = pdfResult.text;
+                    } else {
+                        imgSource = pdfResult; // Rasteriserad bild
+                    }
+                } else {
+                    this.ocrStatus = "Optimerar bild för OCR...";
+                    imgSource = await this.downscaleImage(dataUrl);
+                }
+
+                if (!finalRawText) {
+                    this.ocrStatus = "Tolkar bild (Tesseract WASM)...";
+                    const worker = await Tesseract.createWorker('swe', 1, {
+                        workerPath: '/static/js/vendor/ocr/worker.min.js',
+                        corePath: '/static/js/vendor/ocr/tesseract-core.wasm.js',
+                        langPath: '/static/js/vendor/ocr',
+                        gzip: true,
+                        logger: m => {
+                            if (m.status === 'recognizing text') {
+                                this.ocrStatus = `Tolkar text (${Math.round(m.progress * 100)}%)...`;
+                            }
+                        }
+                    });
+                    
+                    const { data: { text } } = await worker.recognize(imgSource);
+                    await worker.terminate();
+                    finalRawText = text;
+                }
+
+                console.log("=== OCR RAW TEXT ===");
+                console.log(finalRawText);
+                
+                // Slice 4: Inverted Matching & Heuristics (Backend)
+                this.ocrStatus = "Slår upp leverantör och belopp...";
+                const ocrRes = await this.authFetch('/api/ocr/parse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ raw_text: finalRawText })
+                });
+
+                if (!ocrRes.ok) {
+                    throw new Error(`Serverfel vid OCR-parsning: ${ocrRes.status}`);
+                }
+
+                const data = await ocrRes.json();
+                console.log("=== OCR PARSED JSON ===", data);
+                
+                let fieldsFound = 0;
+
+                // Destruktiv överskrivnings-guard
+                if (data.vendor) {
+                    this.form.text = data.vendor;
+                    fieldsFound++;
+                }
+
+                if (data.amount_cents > 0) {
+                    // Pre-fill the Magic Wand (Trollstaven) prompt amount.
+                    this.templatePrompt.amount = data.amount_cents / 100;
+                    fieldsFound++;
+                }
+
+                if (data.date) {
+                    this.form.date = data.date;
+                    fieldsFound++;
+                    
+                    // Fiscal Year Validation Warning
+                    const fy = this.activeFiscalYear;
+                    if (fy && (data.date < fy.start_date || data.date > fy.end_date)) {
+                        setTimeout(() => this.showToast(`Kvittots datum (${data.date}) ligger utanför aktivt räkenskapsår!`, 'warning'), 1500);
+                    }
+                }
+
+                // Dynamisk UX-Feedback
+                if (data.currency === "FOREIGN") {
+                    this.showToast("Utländsk valuta upptäckt! Kontrollera beloppet manuellt.", "warning");
+                } else if (fieldsFound === 3) {
+                    this.showToast("OCR klar! Datum, belopp och leverantör ifyllt.", "success");
+                } else if (fieldsFound > 0) {
+                    this.showToast("OCR delvis lyckad. Vänligen komplettera saknade fält.", "warning");
+                } else {
+                    this.showToast("OCR kunde inte tolka texten. Fyll i manuellt.", "error"); // Bytt till orange/error
+                }
+                
+            } catch (e) {
+                console.error("OCR Error:", e);
+                this.showToast("OCR misslyckades: " + e.message, "error");
+            } finally {
+                this.isScanningOcr = false;
+                this.ocrStatus = "";
+            }
+        },
+
+        downscaleImage(dataUrl) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 1500;
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    if (width > MAX_WIDTH) {
+                        height = Math.round((height * MAX_WIDTH) / width);
+                        width = MAX_WIDTH;
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Fyll med vit bakgrund ifall bilden har transparens
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillRect(0, 0, width, height);
+                    ctx.drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.9));
+                };
+                img.onerror = () => {
+                    console.warn("Kunde inte ladda bilden för optimering. Fortsätter med originalbild.");
+                    resolve(dataUrl);
+                };
+                img.src = dataUrl;
+            });
+        },
+
+        async rasterizePDF(buffer) {
+            if (!window.pdfjsLib) {
+                console.warn("PDF.js inte laddad. Fallback ignoreras.");
+                return null;
+            }
+            
+            const pdfjsLib = window.pdfjsLib;
+            pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/js/vendor/ocr/pdf.worker.min.js';
+            
+            const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
+            const pdf = await loadingTask.promise;
+            const page = await pdf.getPage(1);
+            
+            // Försök extrahera vektor-text först
+            const textContent = await page.getTextContent();
+            const rawText = textContent.items.map(item => item.str).join(' ');
+            
+            if (rawText.trim().length > 20) {
+                console.log("PDF.js extraherade text direkt!");
+                return { isDirectText: true, text: rawText };
+            }
+            
+            console.log("PDF.js text är tom. Rasteriserar för Tesseract fallback...");
+            
+            // Rasterisera inscannad PDF
+            const scale = 2.0; 
+            const viewport = page.getViewport({ scale: scale });
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            
+            const renderContext = { canvasContext: ctx, viewport: viewport };
+            await page.render(renderContext).promise;
+            
+            return canvas.toDataURL('image/jpeg', 0.9);
         },
 
         inspectSavedReceipt(hash, mime) {
@@ -790,16 +999,26 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        get totalDebet() {
-            return this.form.rows.reduce((sum, row) => sum + (Number(row.debet) || 0), 0);
+        getTotalDebet() {
+            return this.form.rows.reduce((sum, row) => {
+                let val = row.debet;
+                if (typeof val === 'string') val = val.replace(',', '.').replace(/ /g, '');
+                let num = parseFloat(val);
+                return sum + (isNaN(num) ? 0 : num);
+            }, 0);
         },
 
-        get totalKredit() {
-            return this.form.rows.reduce((sum, row) => sum + (Number(row.kredit) || 0), 0);
+        getTotalKredit() {
+            return this.form.rows.reduce((sum, row) => {
+                let val = row.kredit;
+                if (typeof val === 'string') val = val.replace(',', '.').replace(/ /g, '');
+                let num = parseFloat(val);
+                return sum + (isNaN(num) ? 0 : num);
+            }, 0);
         },
 
-        get diff() {
-            return this.totalDebet - this.totalKredit;
+        getDiff() {
+            return this.getTotalDebet() - this.getTotalKredit();
         },
 
         focusNext(event) {
@@ -831,7 +1050,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async submitPost() {
-            if (this.showSettings || this.showKontoplan || this.showMoms) return;
+            if (this.showSettings || this.showKontoplan || this.showMoms || this.isScanningOcr) return;
 
             if (!this.form.date || !this.form.text) {
                 this.showToast('Datum och text är obligatoriskt', 'error');
@@ -845,11 +1064,11 @@ document.addEventListener('alpine:init', () => {
             }
             this.formDateError = '';
 
-            if (this.diff !== 0) {
+            if (this.getDiff() !== 0) {
                 this.showToast('Verifikationen balanserar inte!', 'error');
                 return;
             }
-            if (this.totalDebet <= 0) {
+            if (this.getTotalDebet() <= 0) {
                 this.showToast('Du måste ange ett belopp över 0 kronor', 'error');
                 return;
             }
@@ -866,8 +1085,8 @@ document.addEventListener('alpine:init', () => {
                         attachmentBase64: this.form.attachmentBase64,
                         rows: validRows.map(r => ({
                             account: r.account.toString().trim(),
-                            debet: Math.round(Number(r.debet) * 100), // Till öre om vi använde float, men vi antar heltal nu
-                            kredit: Math.round(Number(r.kredit) * 100)
+                            debet: Math.round((Number(typeof r.debet === 'string' ? r.debet.replace(',', '.') : r.debet) || 0) * 100),
+                            kredit: Math.round((Number(typeof r.kredit === 'string' ? r.kredit.replace(',', '.') : r.kredit) || 0) * 100)
                         }))
                     })
                 });
@@ -887,7 +1106,13 @@ document.addEventListener('alpine:init', () => {
                     ];
                     this.showInspector = false;
                     await this.fetchVerifications();
+                    await this.fetchDashboardData();
                     await this.runVerification();
+                    
+                    // UX: Scrolla ner så att användaren direkt ser den nya posten i listan
+                    setTimeout(() => {
+                        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                    }, 100);
                 } else {
                     const err = await res.json();
                     this.showToast('Fel: ' + err.error, 'error');
@@ -911,6 +1136,40 @@ document.addEventListener('alpine:init', () => {
             this.bugLog = [];
             this.showBugLogger = false;
             this.showToast('Logg rensad', 'success');
+        }
+    }));
+
+    Alpine.data('inlineConfirm', (actionId, actionCallback) => ({
+        timer: null,
+        cooldown: false,
+        
+        get confirming() {
+            return this.armedActionId === actionId;
+        },
+        
+        handleClick() {
+            if (!this.confirming) {
+                this.armedActionId = actionId;
+                this.cooldown = true;
+                setTimeout(() => this.cooldown = false, 250);
+                
+                this.timer = setTimeout(() => {
+                    if (this.armedActionId === actionId) this.armedActionId = null;
+                }, 3000);
+            } else {
+                if (this.cooldown) return;
+                
+                this.armedActionId = null;
+                clearTimeout(this.timer);
+                actionCallback();
+            }
+        },
+        
+        cancel() {
+            if (this.confirming) {
+                this.armedActionId = null;
+                clearTimeout(this.timer);
+            }
         }
     }));
 });

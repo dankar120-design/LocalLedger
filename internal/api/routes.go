@@ -12,6 +12,7 @@ import (
 
 	"localledger/internal/ledger"
 	"localledger/internal/models"
+	"localledger/internal/ocr"
 
 	"github.com/xuri/excelize/v2"
 )
@@ -33,6 +34,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/reports/samlingsplan", s.handleGetSamlingsplan)
 	mux.HandleFunc("GET /api/reports/financial", s.handleGetFinancialJSON)
 	mux.HandleFunc("GET /api/reports/excel", s.handleGetFinancialExcel)
+	mux.HandleFunc("GET /api/dashboard", s.handleGetDashboard)
 	mux.HandleFunc("GET /api/accounts", s.handleGetAccounts)
 	mux.HandleFunc("GET /reports", s.handleGetReports)
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
@@ -45,6 +47,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/vat-report/transfer", s.handleTransferVat)
 	mux.HandleFunc("POST /api/import/sie4", s.handleImportSIE4)
 	mux.HandleFunc("POST /api/fiscal-years/{id}/generate-ib", s.handleGenerateIB)
+	mux.HandleFunc("POST /api/ocr/parse", s.handleParseOCR)
 }
 
 // ErrorResponse är standardformatet för felmeddelanden
@@ -88,6 +91,25 @@ func (s *Server) handleGetVerifications(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(verifications)
+}
+
+func (s *Server) handleGetDashboard(w http.ResponseWriter, r *http.Request) {
+	yearIDStr := r.URL.Query().Get("year_id")
+	var yearID *int64
+	if yearIDStr != "" {
+		if id, err := strconv.ParseInt(yearIDStr, 10, 64); err == nil {
+			yearID = &id
+		}
+	}
+
+	metrics, err := s.ledger.GetDashboardMetrics(yearID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(metrics)
 }
 
 func (s *Server) handlePostVerification(w http.ResponseWriter, r *http.Request) {
@@ -666,3 +688,32 @@ func (s *Server) handleGenerateIB(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status":"success"}`))
 }
+
+func (s *Server) handleParseOCR(w http.ResponseWriter, r *http.Request) {
+	// Begränsa payload till ca 10KB för att förhindra DOS/ReDoS från hallucinerad OCR-text
+	r.Body = http.MaxBytesReader(w, r.Body, 10*1024)
+
+	var req struct {
+		RawText string `json:"raw_text"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("invalid request body: %w", err))
+		return
+	}
+
+	// Hämta historiska leverantörer för Inverted Matching
+	knownVendors, err := s.ledger.GetDistinctVendors()
+	if err != nil {
+		// Vi loggar felet men avbryter inte, parsern kan köras utan knownVendors
+		fmt.Printf("Warning: failed to fetch distinct vendors: %v\n", err)
+		knownVendors = []string{}
+	}
+
+	res := ocr.ParseOCRText(req.RawText, knownVendors)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(res)
+}
+

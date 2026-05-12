@@ -146,8 +146,8 @@ func (l *Ledger) GetFinancialReport(yearID *int64) (*models.FinancialReport, err
 			a.code, 
 			a.name, 
 			a.type,
-			SUM(r.debet) as total_debet,
-			SUM(r.kredit) as total_kredit
+			COALESCE(SUM(r.debet), 0) as total_debet,
+			COALESCE(SUM(r.kredit), 0) as total_kredit
 		FROM verification_rows r
 		JOIN verifications v ON r.verification_id = v.id
 		JOIN accounts a ON r.account = a.code
