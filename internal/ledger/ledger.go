@@ -96,6 +96,11 @@ func (l *Ledger) Close() error {
 	return nil
 }
 
+// DB returnerar den underliggande databasanslutningen.
+func (l *Ledger) DB() *sql.DB {
+	return l.db
+}
+
 // IsSandbox returnerar true om detta workspace är i sandlådeläge.
 func (l *Ledger) IsSandbox() bool {
 	return l.isSandbox

@@ -29,8 +29,16 @@
     <script defer src="/static/js/vendor/ocr/tesseract.min.js"></script>
     <script defer src="/static/js/app.js"></script>
     <script defer src="/static/js/alpine.min.js"></script>
+    
+    <!-- Command Palette (Global) -->
+    <link rel="stylesheet" href="/static/css/command-palette.css">
+    <script defer src="/static/js/command-palette.js"></script>
 </head>
-<body x-data="ledgerApp" :data-theme="theme" x-init="$watch('theme', val => localStorage.setItem('theme', val))">
+<body x-data="ledgerApp" 
+      :data-theme="theme" 
+      x-init="$watch('theme', val => localStorage.setItem('theme', val))"
+      @cmd-nav.window="showView($event.detail)"
+      @cmd-action.window="handleCmdAction($event.detail)">
 
     <!-- Sidebar -->
     <aside class="sidebar">
@@ -43,6 +51,7 @@
             <a class="nav-item" href="#" @click.prevent="showSettings=false; showKontoplan=false; showMoms=false; showDashboard=true" :class="showDashboard ? 'active' : ''" style="display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg> Dashboard</a>
             <a class="nav-item" href="#" @click.prevent="showSettings=false; showKontoplan=false; showMoms=false; showDashboard=false" :class="!showSettings && !showKontoplan && !showMoms && !showDashboard ? 'active' : ''" style="display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg> Huvudbok</a>
             <a class="nav-item" :href="activeFiscalYearId ? '/reports?year_id=' + activeFiscalYearId : '/reports'" target="_blank" style="display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg> Rapporter</a>
+            <a class="nav-item" href="/tools" target="_blank" style="display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg> Verktyg & Export</a>
             <a class="nav-item" href="/api/reports/samlingsplan" target="_blank" style="display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> Samlingsplan</a>
             <a class="nav-item" href="#" @click.prevent="showSettings=false; showKontoplan=false; showMoms=true; showDashboard=false" :class="showMoms ? 'active' : ''" style="display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"></circle><path d="M18.09 10.37A6 6 0 1 1 10.34 18"></path><path d="M7 6h1v4"></path><path d="M16.7 13.8l-2.7-2.7"></path></svg> Momsredovisning</a>
             <a class="nav-item" href="#" @click.prevent="showSettings=false; showKontoplan=true; showMoms=false; showDashboard=false" :class="showKontoplan ? 'active' : ''" style="display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg> Kontoplan</a>
@@ -331,8 +340,12 @@
                             <td>
                                 <template x-if="v.rows && v.rows.length > 0 && !v.is_stornoed && !v.storno_ref_id">
                                     <div style="display: flex; gap: 0.5rem;" x-show="!(fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked)">
-                                        <button x-show="!v.hash" x-data="inlineConfirm('void-' + v.id, () => voidDraft(v.id))" @click.stop="handleClick()" @click.outside="cancel()" :class="confirming ? 'danger-btn' : 'icon-btn'" :style="confirming ? 'min-width: 80px; display: flex; align-items: center; justify-content: center;' : 'display: flex; align-items: center; justify-content: center;'" :title="confirming ? 'Klicka igen för att makulera' : 'Makulera utkast'"><span x-show="confirming" style="font-size: 0.8rem; font-weight: bold;">Radera?</span><svg x-show="!confirming" class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
-                                        <button x-show="v.hash" x-data="inlineConfirm('storno-' + v.id, () => stornoVerification(v.id))" @click.stop="handleClick()" @click.outside="cancel()" :class="confirming ? 'danger-btn' : 'icon-btn'" :style="confirming ? 'min-width: 80px; display: flex; align-items: center; justify-content: center;' : 'display: flex; align-items: center; justify-content: center;'" :title="confirming ? 'Klicka igen för att stornera' : 'Stornera låst post'"><span x-show="confirming" style="font-size: 0.8rem; font-weight: bold;">Stornera?</span><svg x-show="!confirming" class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"></path><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><path d="M7 23l-4-4 4-4"></path><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg></button>
+                                        <template x-if="!v.hash">
+                                            <button x-data="inlineConfirm('void-' + v.id, () => voidDraft(v.id))" @click.stop="handleClick()" @click.outside="cancel()" :class="confirming ? 'danger-btn' : 'icon-btn'" :style="confirming ? 'min-width: 80px;' : ''" title="Makulera utkast"><span x-show="confirming" style="font-size: 0.8rem; font-weight: bold;">Radera?</span><svg x-show="!confirming" class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
+                                        </template>
+                                        <template x-if="v.hash">
+                                            <button x-data="inlineConfirm('storno-' + v.id, () => stornoVerification(v.id))" @click.stop="handleClick()" @click.outside="cancel()" :class="confirming ? 'danger-btn' : 'icon-btn'" :style="confirming ? 'min-width: 80px;' : ''" title="Stornera låst post"><span x-show="confirming" style="font-size: 0.8rem; font-weight: bold;">Stornera?</span><svg x-show="!confirming" class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"></path><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><path d="M7 23l-4-4 4-4"></path><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg></button>
+                                        </template>
                                     </div>
                                 </template>
                             </td>
@@ -344,6 +357,41 @@
                 </tbody>
             </table>
         </section>
+
+        <!-- Inbox Drawer -->
+        <section class="inbox-drawer" x-show="!showSettings && !showKontoplan && !showMoms" :class="isInboxDrawerOpen ? 'open' : ''">
+            <div class="inbox-drawer-header" @click="isInboxDrawerOpen = !isInboxDrawerOpen">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                    <strong>Inkorg</strong>
+                    <span class="badge" x-show="inboxItems.length > 0" x-text="inboxItems.length" style="background: var(--primary); color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.75rem;"></span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <button class="icon-btn" @click.stop="fetchCloudInbox()" title="Hämta från molnet" style="padding: 4px 8px; display: flex; align-items: center; background: rgba(59, 130, 246, 0.1); color: var(--primary); border-radius: 4px; font-size: 0.85rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Hämta</button>
+                    <svg class="nav-icon" style="transition: transform 0.3s;" :style="isInboxDrawerOpen ? 'transform: rotate(180deg);' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                </div>
+            </div>
+            <div class="inbox-drawer-content" x-show="isInboxDrawerOpen" x-transition>
+                <div x-show="inboxItems.length === 0" style="padding: 2rem; text-align: center; color: var(--text-muted);">
+                    <p>Inkorgen är tom.</p>
+                </div>
+                <div class="inbox-grid" x-show="inboxItems.length > 0">
+                    <template x-for="item in inboxItems" :key="item.id">
+                        <div class="inbox-item" draggable="true" style="cursor: pointer;" @click="loadInboxItemToForm(item)" @dragstart="e => { e.dataTransfer.setData('application/json', JSON.stringify(item)); e.dataTransfer.effectAllowed = 'copy'; }">
+                            <div class="inbox-item-header">
+                                <span class="inbox-item-name" x-text="item.original_filename" :title="item.original_filename"></span>
+                                <button class="icon-btn" @click.stop="deleteInboxItem(item.id)" title="Radera" style="color: var(--danger); padding: 2px;"><svg class="nav-icon" style="width: 14px; height: 14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                            </div>
+                            <div class="inbox-item-meta">
+                                <span x-text="item.uploaded_at.substring(0, 10)"></span>
+                                <span x-text="item.source === 'cloud' ? '☁️ Moln' : '💻 Lokal'"></span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </section>
+
 
         <!-- Momsredovisning -->
         <section class="panel" x-show="showMoms" style="display: none;">
@@ -479,6 +527,10 @@
                 <div class="form-group">
                     <label>Organisationsnummer (För SIE-4)</label>
                     <input type="text" x-model="settings.org_number" placeholder="T.ex. 555555-5555">
+                </div>
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label>Sökväg till Moln-inkorg (För Kvittouppladdning från mobilen)</label>
+                    <input type="text" x-model="settings.cloud_inbox_path" placeholder="T.ex. G:\Min enhet\LocalLedger Inbox">
                 </div>
             </div>
             <button class="btn primary" @click="saveSettings()">Spara Inställningar</button>

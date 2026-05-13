@@ -1,0 +1,136 @@
+:root {
+    --cmd-bg: #1a1e29;
+    --cmd-surface: #232838;
+    --cmd-text: #e2e8f0;
+    --cmd-text-muted: #94a3b8;
+    --cmd-border: #334155;
+    --cmd-accent: #3b82f6;
+}
+
+#cmd-palette-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 15vh;
+    opacity: 1;
+    transition: opacity 0.2s ease;
+}
+
+#cmd-palette-backdrop.cmd-hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+#cmd-palette-modal {
+    width: 100%;
+    max-width: 600px;
+    background: var(--cmd-bg);
+    border: 1px solid var(--cmd-border);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    transform: translateY(0) scale(1);
+    transition: transform 0.2s ease;
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+#cmd-palette-backdrop.cmd-hidden #cmd-palette-modal {
+    transform: translateY(-20px) scale(0.95);
+}
+
+#cmd-palette-input-wrapper {
+    position: relative;
+    border-bottom: 1px solid var(--cmd-border);
+}
+
+#cmd-palette-input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    padding: 16px 20px 16px 48px;
+    color: var(--cmd-text);
+    font-size: 1.2rem;
+    outline: none;
+}
+
+#cmd-palette-input::placeholder {
+    color: var(--cmd-text-muted);
+}
+
+.cmd-search-icon {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: var(--cmd-text-muted);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+#cmd-palette-results {
+    list-style: none;
+    margin: 0;
+    padding: 8px 0;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.cmd-item {
+    padding: 12px 20px;
+    color: var(--cmd-text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: background 0.1s;
+}
+
+.cmd-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.cmd-item.cmd-active {
+    background: var(--cmd-accent);
+    color: white;
+}
+
+.cmd-item-icon {
+    opacity: 0.7;
+    font-size: 1.1em;
+}
+
+.cmd-item-label {
+    flex-grow: 1;
+}
+
+.cmd-item-shortcut {
+    font-size: 0.8em;
+    background: var(--cmd-surface);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--cmd-text-muted);
+}
+
+.cmd-item.cmd-active .cmd-item-shortcut {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.cmd-empty-state {
+    padding: 20px;
+    text-align: center;
+    color: var(--cmd-text-muted);
+    font-style: italic;
+}

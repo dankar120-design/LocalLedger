@@ -100,7 +100,7 @@ func (l *Ledger) sealVerificationsTx(tx *sql.Tx, user string, onlyOlderThan24h b
 	if onlyOlderThan24h {
 		twentyFourHoursAgo := time.Now().Add(-24 * time.Hour)
 		for _, v := range toSeal {
-			createdAtTime, err := time.Parse("2006-01-02 15:04:05", v.createdAt)
+			createdAtTime, err := time.ParseInLocation("2006-01-02 15:04:05", v.createdAt, time.Local)
 			if err != nil {
 				// Fallback om created_at har konstigt format
 				createdAtTime = time.Now() 

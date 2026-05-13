@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"net/http"
 	"regexp"
 	"strconv"
 	"html/template"
 
+	"localledger/frontend"
 	"localledger/internal/ledger"
 	"localledger/internal/models"
 	"localledger/internal/ocr"
@@ -37,6 +39,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/dashboard", s.handleGetDashboard)
 	mux.HandleFunc("GET /api/accounts", s.handleGetAccounts)
 	mux.HandleFunc("GET /reports", s.handleGetReports)
+	mux.HandleFunc("GET /tools", s.handleGetTools)
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("POST /api/settings", s.handlePostSettings)
 	mux.HandleFunc("POST /api/accounts", s.handleAddAccount)
@@ -48,6 +51,13 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/import/sie4", s.handleImportSIE4)
 	mux.HandleFunc("POST /api/fiscal-years/{id}/generate-ib", s.handleGenerateIB)
 	mux.HandleFunc("POST /api/ocr/parse", s.handleParseOCR)
+
+	// Inbox Routes
+	mux.HandleFunc("GET /api/inbox", s.handleGetInbox)
+	mux.HandleFunc("GET /api/inbox/{id}/download", s.handleDownloadInbox)
+	mux.HandleFunc("POST /api/inbox/upload", s.handleUploadInbox)
+	mux.HandleFunc("DELETE /api/inbox/{id}", s.handleDeleteInbox)
+	mux.HandleFunc("POST /api/inbox/fetch-cloud", s.handleFetchCloud)
 }
 
 // ErrorResponse är standardformatet för felmeddelanden
@@ -313,7 +323,7 @@ func (s *Server) handleFillGaps(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSealVerifications(w http.ResponseWriter, r *http.Request) {
-	res, err := s.ledger.SealVerifications("API User", false)
+	res, err := s.ledger.SealVerifications("API User", true)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -401,7 +411,7 @@ func (s *Server) handleGetReports(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	tmpl, err := template.New("reports.html").Funcs(funcMap).ParseFiles("frontend/views/reports.html")
+	tmpl, err := template.New("reports.html").Funcs(funcMap).ParseFS(frontend.FS, "views/reports.html")
 	if err != nil {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -715,5 +725,101 @@ func (s *Server) handleParseOCR(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(res)
+}
+
+func (s *Server) handleGetInbox(w http.ResponseWriter, r *http.Request) {
+	items, err := s.inbox.GetAllItems()
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if items == nil {
+		items = []models.InboxItem{} // Prevent null in JSON
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(items)
+}
+
+func (s *Server) handleUploadInbox(w http.ResponseWriter, r *http.Request) {
+	// Max 20 MB (lite extra marginal)
+	r.Body = http.MaxBytesReader(w, r.Body, 21*1024*1024)
+	if err := r.ParseMultipartForm(20 * 1024 * 1024); err != nil {
+		writeError(w, fmt.Errorf("file too large or invalid multipart: %w", err))
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, fmt.Errorf("missing file field: %w", err))
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		writeError(w, fmt.Errorf("failed to read file: %w", err))
+		return
+	}
+
+	item, err := s.inbox.SaveFile(data, header.Filename, "local")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(item)
+}
+
+func (s *Server) handleDeleteInbox(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := s.inbox.DeleteItem(id); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"deleted"}`))
+}
+
+func (s *Server) handleDownloadInbox(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	mimeType, filePath, err := s.inbox.GetItemInfo(id)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	
+	file, err := os.Open(filePath)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	defer file.Close()
+
+	if info, err := file.Stat(); err == nil {
+		w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
+	}
+
+	w.Header().Set("Content-Type", mimeType)
+	w.Header().Set("Cache-Control", "no-cache")
+	io.Copy(w, file)
+}
+
+func (s *Server) handleFetchCloud(w http.ResponseWriter, r *http.Request) {
+	result, err := s.inbox.FetchFromCloud()
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "ok",
+		"fetched": result.Fetched,
+		"failed":  result.Failed,
+		"errors":  result.Errors,
+	})
 }
 

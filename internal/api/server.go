@@ -16,13 +16,14 @@ import (
 	"time"
 
 	"localledger/frontend"
+	"localledger/internal/inbox"
 	"localledger/internal/ledger"
 )
 
-// Server kapslar in HTTP-servern och bokföringsmotorn.
 type Server struct {
 	httpServer   *http.Server
 	ledger       *ledger.Ledger
+	inbox        *inbox.InboxManager
 	token        string
 	indexTmpl    *template.Template
 	shutdownChan chan struct{}
@@ -50,7 +51,7 @@ func Start(workspace string, port int) (*Server, error) {
 	}
 
 	// 1. Öppna LocalLedger
-	l, err := ledger.OpenLedger(workspace, "v1.4.0")
+	l, err := ledger.OpenLedger(workspace, "v1.5.0")
 	if err != nil {
 		listener.Close() // Stäng listener om vi misslyckas efter bind
 		return nil, fmt.Errorf("failed to open ledger: %w", err)
@@ -73,6 +74,7 @@ func Start(workspace string, port int) (*Server, error) {
 
 	s := &Server{
 		ledger:       l,
+		inbox:        inbox.NewInboxManager(l.DB(), workspace),
 		token:        token,
 		indexTmpl:    indexTmpl,
 		shutdownChan: make(chan struct{}),
@@ -143,8 +145,8 @@ func (s *Server) Token() string {
 // authMiddleware kräver 'Authorization: Bearer <token>' för alla /api/-anrop.
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Vi vill skydda allt under /api/ utom /api/attachments/, /api/reports/samlingsplan, /api/reports/excel och /api/export/
-		if strings.HasPrefix(r.URL.Path, "/api/") && !strings.HasPrefix(r.URL.Path, "/api/attachments/") && !strings.HasPrefix(r.URL.Path, "/api/reports/samlingsplan") && !strings.HasPrefix(r.URL.Path, "/api/reports/excel") && !strings.HasPrefix(r.URL.Path, "/api/export/") {
+		// Vi vill skydda allt under /api/ utom /api/attachments/, /api/reports/samlingsplan och /api/reports/excel
+		if strings.HasPrefix(r.URL.Path, "/api/") && !strings.HasPrefix(r.URL.Path, "/api/attachments/") && !strings.HasPrefix(r.URL.Path, "/api/reports/samlingsplan") && !strings.HasPrefix(r.URL.Path, "/api/reports/excel") {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 				http.Error(w, "Unauthorized: Missing Bearer Token", http.StatusUnauthorized)
@@ -191,6 +193,25 @@ func (s *Server) handleFrontendIndex(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.indexTmpl.Execute(w, data); err != nil {
+		http.Error(w, "Failed to render template", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) handleGetTools(w http.ResponseWriter, r *http.Request) {
+	data := struct {
+		Token string
+	}{
+		Token: s.token,
+	}
+
+	tmpl, err := template.ParseFS(frontend.FS, "views/tools.html")
+	if err != nil {
+		http.Error(w, "Kunde inte ladda tools-mallen", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
 		http.Error(w, "Failed to render template", http.StatusInternalServerError)
 	}
 }

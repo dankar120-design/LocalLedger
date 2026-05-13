@@ -241,6 +241,20 @@ func runMigrations(db *sql.DB) error {
 		ALTER TABLE verifications ADD COLUMN type TEXT NOT NULL DEFAULT 'NORMAL';
 		UPDATE schema_version SET version = 'v1.5.0', app_min_version = 'v1.4.0';
 		`,
+		// Version 9: Phase 2 - Inbox & Cloud Fetch
+		`
+		CREATE TABLE IF NOT EXISTS inbox_items (
+			id TEXT PRIMARY KEY,
+			original_filename TEXT NOT NULL,
+			stored_filename TEXT NOT NULL,
+			file_size INTEGER NOT NULL,
+			mime_type TEXT NOT NULL,
+			uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			source TEXT DEFAULT 'local'
+		);
+		ALTER TABLE company_settings ADD COLUMN cloud_inbox_path TEXT NOT NULL DEFAULT '';
+		UPDATE schema_version SET version = 'v2.0.0', app_min_version = 'v1.5.0';
+		`,
 	}
 
 	for i := currentVersion; i < len(migrations); i++ {

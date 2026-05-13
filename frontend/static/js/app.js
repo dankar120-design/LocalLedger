@@ -60,8 +60,62 @@ document.addEventListener('alpine:init', () => {
         vatEndDate: '',
         vatPeriodPreset: '',
         basAccounts: [],
-        settings: { name: '', org_number: '' },
+        settings: { name: '', org_number: '', cloud_inbox_path: '' },
         newAccount: { code: '', name: '', type: 'Kostnad' },
+
+        inboxItems: [],
+        isInboxDrawerOpen: false,
+
+        async fetchInbox() {
+            try {
+                const res = await this.authFetch('/api/inbox');
+                if (res.ok) {
+                    this.inboxItems = await res.json() || [];
+                }
+            } catch (e) { console.error("Failed to fetch inbox", e); }
+        },
+
+        async fetchCloudInbox() {
+            this.showToast('Hämtar kvitton från molnet...', 'info');
+            try {
+                const res = await this.authFetch('/api/inbox/fetch-cloud', { method: 'POST' });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.fetched > 0) {
+                        this.showToast(`Hämtade ${data.fetched} nya filer!`, 'success');
+                        this.fetchInbox();
+                    } else if (data.failed === 0) {
+                        this.showToast('Inga nya filer i molnet.', 'info');
+                    }
+
+                    if (data.failed > 0) {
+                        this.showToast(`${data.failed} filer misslyckades.`, 'error');
+                        data.errors.forEach(err => {
+                            this.showToast(err, 'error');
+                        });
+                    }
+                } else {
+                    const err = await res.json();
+                    this.showToast('Fel: ' + err.error, 'error');
+                }
+            } catch (e) {
+                this.showToast('Nätverksfel vid hämtning', 'error');
+            }
+        },
+
+        async deleteInboxItem(id) {
+            try {
+                const res = await this.authFetch(`/api/inbox/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    this.inboxItems = this.inboxItems.filter(i => i.id !== id);
+                    this.showToast('Kvitto borttaget', 'success');
+                } else {
+                    this.showToast('Kunde inte ta bort kvitto', 'error');
+                }
+            } catch(e) {
+                this.showToast('Nätverksfel', 'error');
+            }
+        },
         
         templates: [
             {
@@ -248,6 +302,21 @@ document.addEventListener('alpine:init', () => {
             this.fetchDashboardData();
             this.fetchSettings();
             this.runVerification();
+            this.fetchInbox();
+
+            // Command Palette SPA Routing Hook
+            setTimeout(() => {
+                const startupView = sessionStorage.getItem('startup_view');
+                const startupAction = sessionStorage.getItem('startup_action');
+                
+                if (startupView) {
+                    sessionStorage.removeItem('startup_view');
+                    window.dispatchEvent(new CustomEvent('cmd-nav', { detail: startupView }));
+                } else if (startupAction) {
+                    sessionStorage.removeItem('startup_action');
+                    window.dispatchEvent(new CustomEvent('cmd-action', { detail: startupAction }));
+                }
+            }, 100);
 
             // Toggle dashboard med Alt+D
             window.addEventListener('keydown', (e) => {
@@ -748,13 +817,55 @@ document.addEventListener('alpine:init', () => {
             return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
         },
 
-        handleFileDrop(e) {
+        async loadInboxItemToForm(item) {
+            if (this.form.attachmentBase64 && !confirm('Ett kvitto är redan inläst. Vill du skriva över pågående verifikation?')) {
+                return;
+            }
+
+            this.isInboxDrawerOpen = false; // Auto-close drawer
+            this.showToast('Laddar in kvitto från inkorgen...', 'info');
+            
+            try {
+                const res = await this.authFetch(`/api/inbox/${item.id}/download`);
+                if (!res.ok) throw new Error("Kunde inte hämta filen från servern");
+                
+                const blob = await res.blob();
+                const file = new File([blob], item.original_filename, { type: item.mime_type });
+                
+                // Hårdkodat minne att radera objektet vid bokföring
+                this.form.inboxItemId = item.id;
+                
+                this.processDroppedFile(file);
+                
+                // Scrolla upp till formuläret
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } catch(err) {
+                this.showToast(err.message, 'error');
+            }
+        },
+
+        async handleFileDrop(e) {
+            // Check for internal drop from the Inbox Drawer
+            if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('application/json')) {
+                const dataStr = e.dataTransfer.getData('application/json');
+                if (dataStr) {
+                    const item = JSON.parse(dataStr);
+                    await this.loadInboxItemToForm(item);
+                }
+                return;
+            }
+
             const files = e.dataTransfer ? e.dataTransfer.files : e.target.files;
             if (!files || files.length === 0) return;
             const file = files[0];
             
-            if (file.size > 10 * 1024 * 1024) {
-                this.showToast("Filen är för stor (Max 10MB)", "error");
+            this.form.inboxItemId = null; // Rensa om ny extern fil droppas
+            this.processDroppedFile(file);
+        },
+
+        processDroppedFile(file) {
+            if (file.size > 20 * 1024 * 1024) {
+                this.showToast("Filen är för stor (Max 20MB)", "error");
                 return;
             }
             
@@ -853,19 +964,27 @@ document.addEventListener('alpine:init', () => {
 
                 // Destruktiv överskrivnings-guard
                 if (data.vendor) {
-                    this.form.text = data.vendor;
                     fieldsFound++;
+                    if (!this.form.text) {
+                        this.form.text = data.vendor;
+                    }
                 }
 
                 if (data.amount_cents > 0) {
-                    // Pre-fill the Magic Wand (Trollstaven) prompt amount.
-                    this.templatePrompt.amount = data.amount_cents / 100;
                     fieldsFound++;
+                    // Pre-fill the Magic Wand (Trollstaven) prompt amount, only if user hasn't typed in it yet.
+                    if (!this.templatePrompt.amount) {
+                        this.templatePrompt.amount = data.amount_cents / 100;
+                    }
                 }
 
                 if (data.date) {
-                    this.form.date = data.date;
                     fieldsFound++;
+                    // BFL-Regel: Kvittots datum är auktoritativt. Men vi varnar användaren om vi skriver över deras manuella (Dagens) datum.
+                    if (this.form.date && this.form.date !== data.date) {
+                        this.showToast(`Datum uppdaterades automatiskt till kvittots datum (${data.date})`, 'warning');
+                    }
+                    this.form.date = data.date;
                     
                     // Fiscal Year Validation Warning
                     const fy = this.activeFiscalYear;
@@ -1049,6 +1168,43 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        // Command Palette Handlers
+        showView(viewName) {
+            this.showDashboard = false;
+            this.showMoms = false;
+            this.showKontoplan = false;
+            this.showSettings = false;
+
+            switch(viewName) {
+                case 'dashboard':
+                    this.showDashboard = true;
+                    break;
+                case 'momsredovisning':
+                    this.showMoms = true;
+                    break;
+                case 'kontoplan':
+                    this.showKontoplan = true;
+                    break;
+                case 'installningar':
+                    this.showSettings = true;
+                    break;
+                case 'huvudbok':
+                    // Default view is huvudbok when all others are false
+                    break;
+            }
+        },
+
+        handleCmdAction(actionName) {
+            if (actionName === 'ny-verifikation') {
+                this.showView('huvudbok');
+                // Focus the description input field to start typing immediately
+                setTimeout(() => {
+                    const descInput = document.querySelector('[x-ref="formDesc"]');
+                    if (descInput) descInput.focus();
+                }, 100);
+            }
+        },
+
         async submitPost() {
             if (this.showSettings || this.showKontoplan || this.showMoms || this.isScanningOcr) return;
 
@@ -1077,22 +1233,31 @@ document.addEventListener('alpine:init', () => {
             const validRows = this.form.rows.filter(r => r.account && (r.debet !== 0 || r.kredit !== 0 || r.debet < 0 || r.kredit < 0));
 
             try {
+                const reqBody = {
+                    date: this.form.date,
+                    text: this.form.text,
+                    attachmentBase64: this.form.attachmentBase64,
+                    rows: validRows.map(r => ({
+                        account: r.account.toString().trim(),
+                        debet: Math.round((Number(typeof r.debet === 'string' ? r.debet.replace(',', '.') : r.debet) || 0) * 100),
+                        kredit: Math.round((Number(typeof r.kredit === 'string' ? r.kredit.replace(',', '.') : r.kredit) || 0) * 100)
+                    }))
+                };
+                
                 const res = await this.authFetch('/api/verifications', {
                     method: 'POST',
-                    body: JSON.stringify({
-                        date: this.form.date,
-                        text: this.form.text,
-                        attachmentBase64: this.form.attachmentBase64,
-                        rows: validRows.map(r => ({
-                            account: r.account.toString().trim(),
-                            debet: Math.round((Number(typeof r.debet === 'string' ? r.debet.replace(',', '.') : r.debet) || 0) * 100),
-                            kredit: Math.round((Number(typeof r.kredit === 'string' ? r.kredit.replace(',', '.') : r.kredit) || 0) * 100)
-                        }))
-                    })
+                    body: JSON.stringify(reqBody)
                 });
 
                 if (res.ok) {
                     this.showToast('Bokförd!', 'success');
+                    
+                    // Om det kom från inkorgen, radera det därifrån nu
+                    if (this.form.inboxItemId) {
+                        await this.deleteInboxItem(this.form.inboxItemId);
+                        this.form.inboxItemId = null;
+                        this.isInboxDrawerOpen = true; // Öppna lådan igen efter bokföring
+                    }
                     
                     // Uppdatera dashboard lokalt
                     this.updateDashboardLocally(validRows);

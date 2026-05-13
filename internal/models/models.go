@@ -81,8 +81,9 @@ type FinancialReport struct {
 }
 
 type CompanySettings struct {
-	Name      string `json:"name"`
-	OrgNumber string `json:"org_number"`
+	Name           string `json:"name"`
+	OrgNumber      string `json:"org_number"`
+	CloudInboxPath string `json:"cloud_inbox_path"`
 }
 
 type DashboardMetrics struct {
