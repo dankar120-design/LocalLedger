@@ -38,8 +38,6 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/reports/excel", s.handleGetFinancialExcel)
 	mux.HandleFunc("GET /api/dashboard", s.handleGetDashboard)
 	mux.HandleFunc("GET /api/accounts", s.handleGetAccounts)
-	mux.HandleFunc("GET /reports", s.handleGetReports)
-	mux.HandleFunc("GET /tools", s.handleGetTools)
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("POST /api/settings", s.handlePostSettings)
 	mux.HandleFunc("POST /api/accounts", s.handleAddAccount)
@@ -48,6 +46,17 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/import/backup", s.handleRestoreBackup)
 	mux.HandleFunc("GET /api/vat-report", s.handleGetVatReport)
 	mux.HandleFunc("POST /api/vat-report/transfer", s.handleTransferVat)
+
+	// Invoices
+	mux.HandleFunc("GET /api/invoices", s.HandleGetInvoices)
+	mux.HandleFunc("POST /api/invoices", s.HandleCreateInvoice)
+	mux.HandleFunc("GET /api/invoices/{id}", s.HandleGetInvoice)
+	mux.HandleFunc("PUT /api/invoices/{id}", s.HandleUpdateInvoice)
+	mux.HandleFunc("DELETE /api/invoices/{id}", s.HandleDeleteInvoice)
+	mux.HandleFunc("POST /api/invoices/{id}/post", s.HandlePostInvoice)
+	mux.HandleFunc("POST /api/invoices/{id}/pay", s.HandlePayInvoice)
+	mux.HandleFunc("GET /api/invoices/{id}/pdf", s.HandleGetInvoicePDF)
+
 	mux.HandleFunc("POST /api/import/sie4", s.handleImportSIE4)
 	mux.HandleFunc("POST /api/fiscal-years/{id}/generate-ib", s.handleGenerateIB)
 	mux.HandleFunc("POST /api/ocr/parse", s.handleParseOCR)

@@ -15,6 +15,9 @@ document.addEventListener('alpine:init', () => {
         showSettings: false,
         showKontoplan: false,
         showMoms: false,
+        showInvoices: false,
+        invoices: [],
+        selectedInvoice: null,
         showSealModal: false,
         showRestoreModal: false,
         restoreComplete: false,
@@ -303,6 +306,7 @@ document.addEventListener('alpine:init', () => {
             this.fetchSettings();
             this.runVerification();
             this.fetchInbox();
+            this.loadInvoices();
 
             // Command Palette SPA Routing Hook
             setTimeout(() => {
@@ -325,6 +329,310 @@ document.addEventListener('alpine:init', () => {
                     this.showDashboard = !this.showDashboard;
                 }
             });
+        },
+
+        async loadInvoices() {
+            try {
+                this.invoices = [];
+                const res = await this.authFetch('/api/invoices');
+                if (res.ok) {
+                    this.invoices = await res.json();
+                } else {
+                    this.showToast("Kunde inte ladda fakturor", "error");
+                }
+            } catch(e) {
+                console.error(e);
+                this.showToast("Kunde inte ladda fakturor", "error");
+            }
+        },
+
+        async selectInvoice(inv) {
+            try {
+                const res = await this.authFetch(`/api/invoices/${inv.id}`);
+                if (!res.ok) throw new Error("Kunde inte hämta fakturadetaljer");
+                const fullInv = await res.json();
+                
+                if (fullInv.status === 'utkast') {
+                    this.selectedInvoice = JSON.parse(JSON.stringify(fullInv));
+                    if (!this.selectedInvoice.items) this.selectedInvoice.items = [];
+                    this.selectedInvoice.items.forEach(item => {
+                        item.quantity_float = item.quantity / 100;
+                        item.price_float = item.price_ex_vat / 100;
+                    });
+                } else {
+                    this.selectedInvoice = fullInv;
+                }
+            } catch(e) {
+                console.error(e);
+                this.showToast("Ett fel uppstod vid laddning av fakturan.", "error");
+            }
+        },
+
+        createNewInvoice() {
+            const today = new Date().toISOString().split('T')[0];
+            let dueDate = new Date();
+            dueDate.setDate(dueDate.getDate() + 30);
+
+            this.selectedInvoice = {
+                customer_name: '',
+                customer_orgnr: '',
+                customer_address: '',
+                date: today,
+                due_date: dueDate.toISOString().split('T')[0],
+                payment_terms_days: 30,
+                status: 'utkast',
+                items: [{ description: '', quantity_float: 1, price_float: 0, vat_rate: 25 }]
+            };
+            this.recalcInvoice();
+        },
+
+        updateInvoiceDueDate() {
+            if(!this.selectedInvoice || !this.selectedInvoice.date) return;
+            let d = new Date(this.selectedInvoice.date);
+            d.setDate(d.getDate() + (this.selectedInvoice.payment_terms_days || 0));
+            this.selectedInvoice.due_date = d.toISOString().split('T')[0];
+        },
+
+        addInvoiceItem() {
+            if(!this.selectedInvoice) return;
+            this.selectedInvoice.items.push({ description: '', quantity_float: 1, price_float: 0, vat_rate: 25 });
+            this.recalcInvoice();
+        },
+
+        removeInvoiceItem(idx) {
+            if(!this.selectedInvoice) return;
+            this.selectedInvoice.items.splice(idx, 1);
+            this.recalcInvoice();
+        },
+
+        recalcInvoice() {
+            if(!this.selectedInvoice) return;
+            let totalExVat = 0;
+            let totalVat = 0;
+            (this.selectedInvoice.items || []).forEach(item => {
+                const qty = Math.round((item.quantity_float || 0) * 100);
+                const price = Math.round((item.price_float || 0) * 100);
+                item.quantity = qty;
+                item.price_ex_vat = price;
+
+                const lineExVat = (price * qty) / 100;
+                const lineVat = Math.round((lineExVat * item.vat_rate) / 100);
+                
+                totalExVat += lineExVat;
+                totalVat += lineVat;
+            });
+            this.selectedInvoice.total_amount = totalExVat + totalVat;
+            this.selectedInvoice.total_vat = totalVat;
+        },
+
+        async saveInvoice() {
+            this.recalcInvoice();
+            try {
+                if (!this.selectedInvoice.date || !this.selectedInvoice.due_date) {
+                    this.showToast("Datum och förfallodatum är obligatoriska", "error");
+                    return;
+                }
+                
+                const fy = this.activeFiscalYear;
+                if (fy && (this.selectedInvoice.date < fy.start_date || this.selectedInvoice.date > fy.end_date)) {
+                    this.showToast("Fakturadatum ligger utanför det aktiva räkenskapsåret", "error");
+                    return;
+                }
+
+                const isNew = !this.selectedInvoice.id;
+                const method = isNew ? 'POST' : 'PUT';
+                const url = isNew ? '/api/invoices' : `/api/invoices/${this.selectedInvoice.id}`;
+
+                const res = await this.authFetch(url, {
+                    method,
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(this.selectedInvoice)
+                });
+                
+                if (res.ok) {
+                    if (isNew) {
+                        const data = await res.json();
+                        this.selectedInvoice.id = data.id;
+                    }
+                    this.showToast("Fakturan sparades", "success");
+                    await this.loadInvoices();
+                    const updated = this.invoices.find(i => i.id === this.selectedInvoice.id);
+                    if(updated) this.selectInvoice(updated);
+                } else {
+                    const errText = await res.text();
+                    this.showToast("Kunde inte spara fakturan: " + errText, "error");
+                }
+            } catch(e) {
+                console.error(e);
+                this.showToast("Nätverksfel vid sparande", "error");
+            }
+        },
+
+        async postInvoice() {
+            const proceed = await this.confirmAction("Vill du bokföra fakturan? Detta går inte att ångra och fakturan får sitt officiella fakturanummer.", "Lås Faktura", "Bokför", true);
+            if (!proceed) return;
+            
+            try {
+                const res = await this.authFetch(`/api/invoices/${this.selectedInvoice.id}/post`, { method: 'POST' });
+                if (res.ok) {
+                    this.showToast("Fakturan bokfördes!", "success");
+                    await this.loadInvoices();
+                    const updated = this.invoices.find(i => i.id === this.selectedInvoice.id);
+                    if(updated) this.selectInvoice(updated);
+                } else {
+                    const errText = await res.text();
+                    this.showToast("Fel vid bokföring: " + errText, "error");
+                }
+            } catch(e) {
+                console.error(e);
+            }
+        },
+
+        async payInvoice() {
+            const dateStr = prompt("Ange datum för inbetalningen (YYYY-MM-DD)", new Date().toISOString().split('T')[0]);
+            if (!dateStr) return;
+
+            try {
+                const res = await this.authFetch(`/api/invoices/${this.selectedInvoice.id}/pay`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ date: dateStr })
+                });
+                if (res.ok) {
+                    this.showToast("Betalning registrerad", "success");
+                    await this.loadInvoices();
+                    const updated = this.invoices.find(i => i.id === this.selectedInvoice.id);
+                    if(updated) this.selectInvoice(updated);
+                } else {
+                    const errText = await res.text();
+                    this.showToast("Fel vid inbetalning: " + errText, "error");
+                }
+            } catch(e) {
+                console.error(e);
+            }
+        },
+
+        async deleteInvoice() {
+            const proceed = await this.confirmAction("Vill du radera detta utkast?", "Radera", "Radera", true);
+            if (!proceed) return;
+            try {
+                const res = await this.authFetch(`/api/invoices/${this.selectedInvoice.id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    this.selectedInvoice = null;
+                    await this.loadInvoices();
+                    this.showToast("Utkastet raderades", "success");
+                } else {
+                    this.showToast("Kunde inte radera utkastet", "error");
+                }
+            } catch(e) {
+                console.error(e);
+            }
+        },
+
+        formatMoneyFloat(val) {
+            if (val === undefined || val === null) return "0.00 kr";
+            return val.toFixed(2) + " kr";
+        },
+
+        async loadFinancialReport() {
+            this.isLoadingReport = true;
+            try {
+                const url = this.activeFiscalYearId ? `/api/reports/financial?year_id=${this.activeFiscalYearId}` : '/api/reports/financial';
+                const res = await this.authFetch(url);
+                if (res.ok) {
+                    this.financialReport = await res.json();
+                } else {
+                    this.showToast("Kunde inte ladda finansiell rapport", "error");
+                }
+            } catch (e) {
+                console.error(e);
+                this.showToast("Kunde inte ladda finansiell rapport", "error");
+            } finally {
+                this.isLoadingReport = false;
+            }
+        },
+
+        async downloadSamlingsplan() {
+            try {
+                const url = this.activeFiscalYearId ? `/api/reports/samlingsplan?year_id=${this.activeFiscalYearId}` : '/api/reports/samlingsplan';
+                const res = await this.authFetch(url);
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const urlBlob = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = urlBlob;
+                    a.download = `Samlingsplan_${this.activeFiscalYearId || 'all'}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(urlBlob);
+                    a.remove();
+                } else {
+                    this.showToast("Kunde inte ladda ner samlingsplan", "error");
+                }
+            } catch (e) {
+                console.error(e);
+                this.showToast("Kunde inte ladda ner samlingsplan", "error");
+            }
+        },
+
+        downloadExcel() {
+            try {
+                if(!this.financialReport) return;
+                const data = this.financialReport;
+                const sep = "\t"; // Excel gillar tabb för CSV i svensk locale
+                
+                const fmt = (val) => {
+                    if(!val) return "0,00";
+                    return val.toFixed(2).replace('.', ',');
+                };
+                
+                let csv = `Finansiell Rapport - ${data.FiscalYear}\n\n`;
+                
+                csv += `Intäkter${sep}${sep}\n`;
+                csv += `Konto${sep}Beskrivning${sep}Belopp\n`;
+                if(data.Income) data.Income.forEach(r => {
+                    csv += `${r.AccountCode}${sep}${r.AccountName}${sep}${fmt(r.Balance/100)}\n`;
+                });
+                csv += `Summa Intäkter${sep}${sep}${fmt(data.TotalIncome/100)}\n\n`;
+                
+                csv += `Kostnader${sep}${sep}\n`;
+                csv += `Konto${sep}Beskrivning${sep}Belopp\n`;
+                if(data.Expenses) data.Expenses.forEach(r => {
+                    csv += `${r.AccountCode}${sep}${r.AccountName}${sep}${fmt(r.Balance/100)}\n`;
+                });
+                csv += `Summa Kostnader${sep}${sep}${fmt(data.TotalExpenses/100)}\n\n`;
+                
+                csv += `Årets Resultat${sep}${sep}${fmt(data.NetIncome/100)}\n\n`;
+
+                csv += `Tillgångar${sep}${sep}\n`;
+                csv += `Konto${sep}Beskrivning${sep}Belopp\n`;
+                if(data.Assets) data.Assets.forEach(r => {
+                    csv += `${r.AccountCode}${sep}${r.AccountName}${sep}${fmt(r.Balance/100)}\n`;
+                });
+                csv += `Summa Tillgångar${sep}${sep}${fmt(data.TotalAssets/100)}\n\n`;
+
+                csv += `Skulder och Eget Kapital${sep}${sep}\n`;
+                csv += `Konto${sep}Beskrivning${sep}Belopp\n`;
+                if(data.Liabilities) data.Liabilities.forEach(r => {
+                    csv += `${r.AccountCode}${sep}${r.AccountName}${sep}${fmt(r.Balance/100)}\n`;
+                });
+                csv += `Summa Skulder${sep}${sep}${fmt(data.TotalLiabilities/100)}\n`;
+                csv += `2099${sep}Årets Resultat${sep}${fmt(data.NetIncome/100)}\n`;
+                csv += `Summa Skulder & Eget Kapital${sep}${sep}${fmt(data.CalculatedEquity/100)}\n`;
+
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const urlObj = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = urlObj;
+                a.download = `LocalLedger_Rapport_${data.FiscalYear}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(urlObj);
+            } catch (err) {
+                console.error("Fel vid CSV-generering:", err);
+                this.showToast("Kunde inte generera Excel-filen", "error");
+            }
         },
 
         async fetchAccounts() {
@@ -1174,6 +1482,10 @@ document.addEventListener('alpine:init', () => {
             this.showMoms = false;
             this.showKontoplan = false;
             this.showSettings = false;
+            this.showInvoices = false;
+            this.showTools = false;
+            this.showReports = false;
+            this.isInboxDrawerOpen = false;
 
             switch(viewName) {
                 case 'dashboard':
@@ -1187,6 +1499,16 @@ document.addEventListener('alpine:init', () => {
                     break;
                 case 'installningar':
                     this.showSettings = true;
+                    break;
+                case 'verktyg':
+                    this.showTools = true;
+                    break;
+                case 'rapporter':
+                    this.showReports = true;
+                    this.loadFinancialReport();
+                    break;
+                case 'fakturering':
+                    this.showInvoices = true;
                     break;
                 case 'huvudbok':
                     // Default view is huvudbok when all others are false

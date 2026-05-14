@@ -1,4 +1,4 @@
-﻿# PROJECT PULSE: LocalLedger
+# PROJECT PULSE: LocalLedger
 *Generated: 2026-05-12 09:20:04*
 
 ## Technical Health
@@ -88,3 +88,12 @@ theme3_enterprise.html    -a---- 2026-05-11 10:41:01
 
 ## Architecture Sync
 - **ARCHITECTURE.md**: Found (Last updated: 2026-05-08 12:07:44)
+
+### 🟡 Slice 16: E2E Validation (Flash)
+**Mål:** Verifiera befintlig kodbas innan ny infrastruktur byggs.
+
+### 🟡 Slice 17: Server Lifecycle
+**Mål:** Eliminera zombie-processer och säkra uppdateringar. Inkluderar Heartbeat, Loggfil och Pre-migration Backup.
+
+### 🟡 Slice 18: Setup Wizard & Sandbox
+**Mål:** Smärtfri onboarding för pilotanvändare utan OneDrive-kollisioner, samt isolerat övningsläge.

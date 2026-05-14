@@ -438,3 +438,19 @@ func (l *Ledger) GetAttachmentInfo(hash string) (string, string, error) {
 
 	return mimeType, filePath, nil
 }
+
+// GetVerificationAttachmentHash returns the attachment hash for a given verification ID.
+func (l *Ledger) GetVerificationAttachmentHash(id int64) (*string, error) {
+	var hash sql.NullString
+	err := l.db.QueryRow("SELECT attachment_hash FROM verifications WHERE id = ?", id).Scan(&hash)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("verification not found")
+		}
+		return nil, err
+	}
+	if !hash.Valid {
+		return nil, nil
+	}
+	return &hash.String, nil
+}

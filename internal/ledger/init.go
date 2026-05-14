@@ -255,6 +255,44 @@ func runMigrations(db *sql.DB) error {
 		ALTER TABLE company_settings ADD COLUMN cloud_inbox_path TEXT NOT NULL DEFAULT '';
 		UPDATE schema_version SET version = 'v2.0.0', app_min_version = 'v1.5.0';
 		`,
+		// Version 10: Phase 6 - Inbyggd Fakturering (Invoices)
+		`
+		ALTER TABLE company_settings ADD COLUMN address TEXT NOT NULL DEFAULT '';
+		ALTER TABLE company_settings ADD COLUMN bankgiro TEXT NOT NULL DEFAULT '';
+		ALTER TABLE company_settings ADD COLUMN swish_number TEXT NOT NULL DEFAULT '';
+		ALTER TABLE company_settings ADD COLUMN invoice_start_number INTEGER NOT NULL DEFAULT 1000;
+		ALTER TABLE company_settings ADD COLUMN payment_terms_days INTEGER NOT NULL DEFAULT 30;
+		ALTER TABLE company_settings ADD COLUMN logo_path TEXT NOT NULL DEFAULT '';
+		
+		CREATE TABLE IF NOT EXISTS invoices (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			invoice_number TEXT UNIQUE,
+			date TEXT NOT NULL,
+			due_date TEXT NOT NULL,
+			payment_terms_days INTEGER DEFAULT 30,
+			customer_name TEXT NOT NULL,
+			customer_orgnr TEXT,
+			customer_address TEXT,
+			total_amount INTEGER NOT NULL,
+			total_vat INTEGER NOT NULL,
+			status TEXT NOT NULL DEFAULT 'utkast',
+			verification_id INTEGER REFERENCES verifications(id),
+			credit_of INTEGER REFERENCES invoices(id),
+			fiscal_year_id INTEGER NOT NULL REFERENCES fiscal_years(id),
+			created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+		);
+
+		CREATE TABLE IF NOT EXISTS invoice_items (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+			description TEXT NOT NULL,
+			quantity INTEGER NOT NULL,
+			price_ex_vat INTEGER NOT NULL,
+			vat_rate INTEGER NOT NULL
+		);
+
+		UPDATE schema_version SET version = 'v3.0.0', app_min_version = 'v2.0.0';
+		`,
 	}
 
 	for i := currentVersion; i < len(migrations); i++ {

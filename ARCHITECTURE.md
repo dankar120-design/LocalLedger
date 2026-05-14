@@ -1,4 +1,4 @@
-# LocalLedger - Systemarkitektur & Domänkarta
+﻿# LocalLedger - Systemarkitektur & Domänkarta
 
 Detta dokument beskriver den övergripande systemarkitekturen för LocalLedger, anpassad för att strikt följa svensk Bokföringslag (BFL), Bokföringsnämndens normering (BFNAR 2013:2) och SIE-4-specifikationen.
 
@@ -91,3 +91,6 @@ Följande instruktioner MÅSTE följas av alla kod-agenter som arbetar med Local
 4. **Självförsörjande Backup:** Du behöver INTE bygga separata backup-script för fakturor. Eftersom fakturorna lever inuti `ledger.db` (och som PDF:er i underlagsmappen) täcks de redan 100% av det atomära ZIP-backup-verktyget.
 5. **BFL Molnsynk-Disclaimer:** Om du bygger UI:t för AES-256 ZIP-export till Google Drive, SKA du inkludera en tydlig text om att det bryter mot BFL 7 kap 1§ om det används som *enda* backup-plats (eftersom servrarna kan ligga utanför EU). Lösenord måste härledas säkert (t.ex. PBKDF2).
 6. **Ingen levande DB i molnet:** Du FÅR ALDRIG uppmana användaren att köra `ledger.db` direkt från en synkad molnmapp (p.g.a. fil-låsningar). Endast den exporterade `.zip`-filen får synkas till molnet.
+7. **First Run Setup:** Du FÅR INTE gissa 'Documents' som defaultmapp (risk för OneDrive-låsning). Setup Mode triggas av saknad --workspace flagga och UI:t måste rekommendera C:\LocalLedger_Data.
+8. **Server Heartbeat:** Du FÅR INTE bygga zombie-processer. MÅSTE använda `time.Since` ping-tracker för shutdown.
+

@@ -51,7 +51,7 @@ func Start(workspace string, port int) (*Server, error) {
 	}
 
 	// 1. Öppna LocalLedger
-	l, err := ledger.OpenLedger(workspace, "v1.5.0")
+	l, err := ledger.OpenLedger(workspace, "v3.0.0")
 	if err != nil {
 		listener.Close() // Stäng listener om vi misslyckas efter bind
 		return nil, fmt.Errorf("failed to open ledger: %w", err)
