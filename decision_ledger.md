@@ -53,4 +53,9 @@
     <kärna>Setup-servern kör nu ett powershell-skript via exec.Command för att generera en genväg på skrivbordet till den nuvarande körande exe-filen vid slutförd onboarding.</kärna>
     <motivering>Ersätter manuell länkhantering och förbättrar användarupplevelsen genom att ge en sömlös integration på Windows-skrivbordet.</motivering>
   </record>
+  <record id="SCRIPT_LOADING_ORDER_FIX" kategori="Felsökning">
+    <beslut>Skifta script-laddningsordningen i index.html så att reaktiva skript laddas före Alpine.js.</beslut>
+    <kärna>Placerat app.js och tools.js före alpine.min.js i index.html:s head med 'defer' intakt.</kärna>
+    <motivering>Garanterar att alla alpine:init-eventlyssnare är fullständigt registrerade innan Alpine.js-motorn startar sin DOM-kompilering, vilket eliminerar slumpmässiga ReferenceErrors under högpresterande Chromium/Playwright-körningar.</motivering>
+  </record>
 </decision_ledger>
