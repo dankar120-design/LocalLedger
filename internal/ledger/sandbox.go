@@ -1,7 +1,6 @@
 package ledger
 
 import (
-	"database/sql"
 	_ "embed"
 	"fmt"
 	"log"
@@ -13,18 +12,17 @@ var sandboxSeedSQL string
 
 // SeedSandbox injicerar testdata i databasen för att möjliggöra testning.
 func SeedSandbox(workspace string) error {
-	dbPath := filepath.Join(workspace, "ledger.db")
-	db, err := sql.Open("sqlite", dbPath)
+	l, err := OpenLedger(workspace, "v3.0.0")
 	if err != nil {
-		return fmt.Errorf("kunde inte öppna sandbox-db: %v", err)
+		return fmt.Errorf("kunde inte öppna eller migrera sandbox-db: %v", err)
 	}
-	defer db.Close()
+	defer l.Close()
 
-	_, err = db.Exec(sandboxSeedSQL)
+	_, err = l.db.Exec(sandboxSeedSQL)
 	if err != nil {
 		return fmt.Errorf("kunde inte injicera seed-data: %v", err)
 	}
 
-	log.Printf("Sandbox seeded successfully at %s", dbPath)
+	log.Printf("Sandbox seeded successfully at %s", filepath.Join(workspace, "ledger.db"))
 	return nil
 }

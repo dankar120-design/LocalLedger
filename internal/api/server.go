@@ -99,7 +99,12 @@ func Start(workspace string, port int, isE2E bool, isSandbox bool) (*Server, err
 		return nil, fmt.Errorf("failed to sub embedded static dir: %w", err)
 	}
 	mux.HandleFunc("GET /", s.handleFrontendIndex)
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		http.FileServer(http.FS(staticFS)).ServeHTTP(w, r)
+	})))
 
 	// Lägg på Authentication Middleware
 	handler := s.authMiddleware(mux)
@@ -199,6 +204,9 @@ func (s *Server) handleFrontendIndex(w http.ResponseWriter, r *http.Request) {
 		IsSandbox: s.isSandbox,
 	}
 
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.indexTmpl.Execute(w, data); err != nil {
 		http.Error(w, "Failed to render template", http.StatusInternalServerError)

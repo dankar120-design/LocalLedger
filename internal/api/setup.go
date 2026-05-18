@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -163,6 +165,46 @@ func StartSetupServer(port int) (string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		srv.Shutdown(ctx)
+		
+		// Skapa skrivbordsgenväg (.lnk) vid slutförd installation
+		createDesktopShortcut()
+
 		return result, nil
 	}
+}
+
+// createDesktopShortcut skapar en Windows-genväg (.lnk) på användarens skrivbord
+func createDesktopShortcut() {
+	exePath, err := exec.LookPath(os.Args[0])
+	if err != nil {
+		exePath, err = os.Executable()
+		if err != nil {
+			return
+		}
+	}
+	
+	absExe, err := filepath.Abs(exePath)
+	if err != nil {
+		return
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+
+	desktopPath := filepath.Join(homeDir, "Desktop", "LocalLedger.lnk")
+	workingDir := filepath.Dir(absExe)
+
+	psScript := fmt.Sprintf(`
+		$WshShell = New-Object -ComObject WScript.Shell
+		$Shortcut = $WshShell.CreateShortcut(%q)
+		$Shortcut.TargetPath = %q
+		$Shortcut.WorkingDirectory = %q
+		$Shortcut.Description = "LocalLedger Bokföring"
+		$Shortcut.Save()
+	`, desktopPath, absExe, workingDir)
+
+	cmd := exec.Command("powershell", "-NoProfile", "-Command", psScript)
+	cmd.Run()
 }

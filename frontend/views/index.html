@@ -22,14 +22,14 @@
     <!-- FOUC Preventer -->
     <script>document.documentElement.dataset.theme = localStorage.getItem('theme') || 'dark';</script>
 
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v={{.Token}}">
     
     <!-- Ladda logik och ramverk lokalt -->
     <script defer src="/static/js/vendor/ocr/pdf.min.js"></script>
     <script defer src="/static/js/vendor/ocr/tesseract.min.js"></script>
     <script defer src="/static/js/alpine.min.js"></script>
-    <script defer src="/static/js/app.js"></script>
-    <script defer src="/static/js/tools.js"></script>
+    <script defer src="/static/js/app.js?v={{.Token}}"></script>
+    <script defer src="/static/js/tools.js?v={{.Token}}"></script>
     
     <style>
         @media print {
@@ -41,8 +41,8 @@
     </style>
 
     <!-- Command Palette (Global) -->
-    <link rel="stylesheet" href="/static/css/command-palette.css">
-    <script defer src="/static/js/command-palette.js"></script>
+    <link rel="stylesheet" href="/static/css/command-palette.css?v={{.Token}}">
+    <script defer src="/static/js/command-palette.js?v={{.Token}}"></script>
 </head>
 <body x-data="ledgerApp" 
       :data-theme="theme" 

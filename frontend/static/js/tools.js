@@ -6,6 +6,7 @@ document.addEventListener('alpine:init', () => {
         // Form states
         selectedExportYear: '',
         ibSourceYear: '',
+        ibTargetYearName: '',
         importSieYear: '',
         
         // Files
@@ -29,6 +30,22 @@ document.addEventListener('alpine:init', () => {
                 this.token = metaToken.getAttribute('content');
             }
             this.fetchFiscalYears();
+
+            // Reaktiv watcher för ibTargetYearName
+            this.$watch('ibSourceYear', (val) => {
+                if (!val) {
+                    this.ibTargetYearName = '';
+                    return;
+                }
+                const source = this.fiscalYears.find(f => f.id == val);
+                if (!source) {
+                    this.ibTargetYearName = '';
+                    return;
+                }
+                const sourceEnd = new Date(source.end_date);
+                const target = this.fiscalYears.find(f => new Date(f.start_date) > sourceEnd);
+                this.ibTargetYearName = target ? target.label : '';
+            });
         },
 
         showToast(msg, type = 'info') {
@@ -124,20 +141,6 @@ document.addEventListener('alpine:init', () => {
         },
 
         // --- ÅRSAVSLUT (IB) ---
-        get ibTargetYearName() {
-            if (!this.ibSourceYear) return '';
-            const source = this.fiscalYears.find(f => f.id == this.ibSourceYear);
-            if (!source) return '';
-            
-            // Leta efter ett år vars start_date är >= source.end_date
-            const sourceEnd = new Date(source.end_date);
-            const target = this.fiscalYears.find(f => new Date(f.start_date) > sourceEnd);
-            
-            if (target) {
-                return target.label;
-            }
-            return '';
-        },
 
         async generateIB() {
             if (!this.ibSourceYear) return;
