@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <title>AG Blueprint - Recovery Protocol</title>
+    <style>
+        body { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, sans-serif; padding: 2rem; }
+        .wireframe { border: 2px dashed #30363d; padding: 2rem; border-radius: 8px; max-width: 600px; margin: 0 auto; }
+        .context-box { background: #161b22; padding: 1rem; border-left: 4px solid #f85149; margin-bottom: 1.5rem; }
+        .mutation-field { width: 100%; background: #0d1117; color: #58a6ff; border: 1px solid #30363d; padding: 0.5rem; margin-top: 1rem; }
+        button { background: #238636; color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 1.5rem; }
+        button:hover { background: #2ea043; }
+        h1, h3 { color: #f0f6fc; }
+    </style>
+</head>
+<body>
+    <div class="wireframe">
+        <h1>[RECOVERY INITIATION]</h1>
+        <div class="context-box">
+            <h3>Context</h3>
+            <p>17 kritiska otrackade filer raderades via git clean. Data kan extraheras från Agent-loggarna (overview.txt) via strikt mönsterigenkänning. Den enda framkomliga vägen är att bygga ett deterministiskt Python-skript som tolkar JSON-strukturerna i loggen och skriver tillbaka filerna.</p>
+        </div>
+        
+        <h3>Action Plan</h3>
+        <p><strong>Steg 1:</strong> Djupdykning (Research) i <code>overview.txt</code> för att validera strukturen.<br>
+           <strong>Steg 2:</strong> Utveckling av <code>rescue.py</code> som extraherar varje <code>write_to_file</code> och <code>multi_replace_file_content</code> från historiken och rekonstruerar filernas sista tillstånd.<br>
+           <strong>Steg 3:</strong> Manuell Git-förankring (<code>git add</code>) för att skydda dem omedelbart.
+        </p>
+
+        <input type="text" class="mutation-field" id="mutation" value="Acceptera recovery-protokollet och påbörja extraktionen.">
+        
+        <button onclick="generateAndCopyJSON()">Kopiera Direktiv (JSON) & Invänta KÖR</button>
+    </div>
+
+    <script>
+        function generateAndCopyJSON() {
+            const mutationStr = document.getElementById('mutation').value;
+            const payload = {
+                "1_local_brain_check": true,
+                "2_delegation": "Local CPU (Python Parser)",
+                "3_action_plan": mutationStr,
+                "4_terminal_execution": "python rescue.py"
+            };
+            const jsonStr = JSON.stringify(payload, null, 2);
+            navigator.clipboard.writeText(jsonStr).then(() => {
+                alert("JSON kopierat! Klistra in detta och skriv 'KÖR' för att aktivera protokollet.");
+            });
+        }
+    </script>
+</body>
+</html>

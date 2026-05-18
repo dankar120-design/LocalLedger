@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalLedger - Setup</title>
+    <style>
+        :root {
+            --bg-color: #0f1115;
+            --glass-bg: rgba(25, 28, 36, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --sandbox: #10b981;
+            --sandbox-hover: #059669;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.15), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.15), transparent 25%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            color: var(--text-main);
+            overflow: hidden;
+        }
+
+        .container {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 3rem;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            transform: translateY(20px);
+            opacity: 0;
+            animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes slideUp {
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .logo {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 1.5rem;
+            animation: pulse 4s infinite alternate;
+        }
+
+        @keyframes pulse {
+            from { filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.5)); }
+            to { filter: drop-shadow(0 0 20px rgba(16, 185, 129, 0.5)); }
+        }
+
+        h1 {
+            margin: 0 0 0.5rem 0;
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+        }
+
+        p {
+            color: var(--text-muted);
+            margin: 0 0 2.5rem 0;
+            font-size: 1.1rem;
+            line-height: 1.5;
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        button {
+            width: 100%;
+            padding: 1rem;
+            border-radius: 12px;
+            border: none;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+        }
+
+        button svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+            box-shadow: 0 4px 14px 0 rgba(59, 130, 246, 0.39);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.23);
+        }
+
+        .btn-sandbox {
+            background-color: transparent;
+            color: var(--sandbox);
+            border: 2px solid var(--sandbox);
+        }
+
+        .btn-sandbox:hover {
+            background-color: rgba(16, 185, 129, 0.1);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.15);
+        }
+
+        .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading .btn-text, .loading svg {
+            display: none;
+        }
+
+        .loading .spinner {
+            display: block;
+        }
+
+        .error-msg {
+            color: #ef4444;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            min-height: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Generisk Ledger-ikon -->
+        <svg class="logo" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+            <path d="M22 6l-10 7L2 6"></path>
+        </svg>
+
+        <h1>Välkommen till LocalLedger</h1>
+        <p>Välj hur du vill starta din session. Du kan skapa en ny arbetsyta för din bokföring eller leka i testmiljön.</p>
+
+        <div class="button-group">
+            <button id="btn-new" class="btn-primary" onclick="submitAction('new_workspace', this)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
+                <span class="btn-text">Välj Bokföringsmapp</span>
+                <div class="spinner"></div>
+            </button>
+            
+            <button id="btn-sandbox" class="btn-sandbox" onclick="submitAction('sandbox', this)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                <span class="btn-text">Starta i Sandbox</span>
+                <div class="spinner"></div>
+            </button>
+        </div>
+
+        <div id="error-container" class="error-msg"></div>
+    </div>
+
+    <script>
+        // Heartbeat för att hålla Go-servern vid liv. Om detta fönster stängs
+        // dör servern automatiskt efter 10 sekunder.
+        const heartbeat = setInterval(() => {
+            fetch('/ping').catch(() => {});
+        }, 2000);
+
+        async function submitAction(action, btnElement) {
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(b => b.disabled = true);
+            
+            btnElement.classList.add('loading');
+            document.getElementById('error-container').innerText = '';
+
+            try {
+                const response = await fetch('/setup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: action })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Något gick fel.');
+                }
+
+                const data = await response.json();
+                if (data.redirect) {
+                    document.getElementById('error-container').style.color = '#10b981';
+                    document.getElementById('error-container').innerText = 'Startar applikationen...';
+                    pollForHandover(data.redirect);
+                }
+            } catch (error) {
+                document.getElementById('error-container').style.color = '#ef4444';
+                document.getElementById('error-container').innerText = error.message;
+                buttons.forEach(b => b.disabled = false);
+                btnElement.classList.remove('loading');
+            }
+        }
+
+        async function pollForHandover(redirectUrl) {
+            let attempts = 0;
+            const interval = setInterval(async () => {
+                attempts++;
+                try {
+                    const testUrl = new URL('/api/health', redirectUrl);
+                    await fetch(testUrl.toString(), { mode: 'no-cors' });
+                    clearInterval(interval);
+                    window.location.href = redirectUrl;
+                } catch (e) {
+                    if (attempts > 30) {
+                        clearInterval(interval);
+                        document.getElementById('error-container').style.color = '#ef4444';
+                        document.getElementById('error-container').innerText = 'Timeout vid start. Ladda om sidan manuellt.';
+                    }
+                }
+            }, 500);
+        }
+    </script>
+</body>
+</html>

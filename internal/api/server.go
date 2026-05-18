@@ -20,12 +20,16 @@ import (
 	"localledger/internal/ledger"
 )
 
+const CurrentAppVersion = "0.9.0"
+
 type Server struct {
 	httpServer   *http.Server
+	listener     net.Listener
 	ledger       *ledger.Ledger
 	inbox        *inbox.InboxManager
 	token        string
 	indexTmpl    *template.Template
+	isSandbox    bool
 	shutdownChan chan struct{}
 	shutdownOnce sync.Once
 }
@@ -41,7 +45,7 @@ func generateToken() string {
 
 // Start initierar och startar servern. Returnerar server-instansen.
 // Den blockerar INTE, utan startar servern i en goroutine.
-func Start(workspace string, port int) (*Server, error) {
+func Start(workspace string, port int, isE2E bool, isSandbox bool) (*Server, error) {
 	// 0. Bind till porten synkront för att fånga fel direkt (t.ex. om porten redan används)
 	// Detta agerar som en applikations-mutex för att garantera single-instance.
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
@@ -73,10 +77,12 @@ func Start(workspace string, port int) (*Server, error) {
 	}
 
 	s := &Server{
+		listener:     listener,
 		ledger:       l,
 		inbox:        inbox.NewInboxManager(l.DB(), workspace),
 		token:        token,
 		indexTmpl:    indexTmpl,
+		isSandbox:    isSandbox,
 		shutdownChan: make(chan struct{}),
 	}
 
@@ -186,9 +192,11 @@ func (s *Server) handleFrontendIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		Token string
+		Token     string
+		IsSandbox bool
 	}{
-		Token: s.token,
+		Token:     s.token,
+		IsSandbox: s.isSandbox,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
