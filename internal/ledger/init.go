@@ -293,6 +293,37 @@ func runMigrations(db *sql.DB) error {
 
 		UPDATE schema_version SET version = 'v3.0.0', app_min_version = 'v2.0.0';
 		`,
+		// Version 11: Phase 7 - Bokslut & IB (Saknade BAS-konton)
+		`
+		INSERT INTO accounts (code, name, type) VALUES 
+			('2019', 'Årets resultat, enskild näringsidkare', 'Skuld'),
+			('2091', 'Balanserad vinst eller förlust', 'Skuld'),
+			('2098', 'Vinst eller förlust från föregående år', 'Skuld'),
+			('2099', 'Årets resultat (EK)', 'Skuld'),
+			('8999', 'Årets resultat', 'Kostnad') ON CONFLICT(code) DO NOTHING;
+		UPDATE schema_version SET version = 'v3.1.0', app_min_version = 'v2.0.0';
+		`,
+		// Version 12: Nya BAS-konton för strikt momsmappning (Ruta 06, 07, 20, 21, 30, 48)
+		`
+		INSERT INTO accounts (code, name, type) VALUES 
+			('2614', 'Utgående moms omvänd skattskyldighet, 25 %', 'Skuld'),
+			('2645', 'Ingående moms på förvärv från utlandet', 'Skuld'),
+			('3002', 'Försäljning inom Sverige, 12 %', 'Intäkt'),
+			('3003', 'Försäljning inom Sverige, 6 %', 'Intäkt'),
+			('3042', 'Försäljning tjänster (Sverige), 12 %', 'Intäkt'),
+			('3043', 'Försäljning tjänster (Sverige), 6 %', 'Intäkt'),
+			('4515', 'Inköp av varor från annat EU-land, 25 %', 'Kostnad'),
+			('4531', 'Inköp av tjänster från annat EU-land, 25 %', 'Kostnad') ON CONFLICT(code) DO NOTHING;
+		UPDATE schema_version SET version = 'v3.2.0', app_min_version = 'v2.0.0';
+		`,
+		// Version 13: Standardkonton för varuförsäljning inrikes 25% (Ruta 05)
+		`
+		INSERT INTO accounts (code, name, type) VALUES 
+			('3010', 'Försäljning varor', 'Intäkt'),
+			('3011', 'Försäljning varor inom Sverige, 25 %', 'Intäkt'),
+			('3020', 'Försäljning tjänster', 'Intäkt') ON CONFLICT(code) DO NOTHING;
+		UPDATE schema_version SET version = 'v3.3.0', app_min_version = 'v2.0.0';
+		`,
 	}
 
 	for i := currentVersion; i < len(migrations); i++ {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"localledger/internal/models"
 	"math"
+	"time"
 )
 
 // CreateInvoice sparar ett nytt fakturautkast
@@ -60,6 +61,47 @@ func (l *Ledger) CreateInvoice(inv models.Invoice) (int64, error) {
 	}
 
 	return invoiceID, nil
+}
+
+// CreateCreditInvoice skapar en kreditfaktura baserad på ett original
+func (l *Ledger) CreateCreditInvoice(originalID int64, user string) (int64, error) {
+	origInv, err := l.GetInvoiceByID(originalID)
+	if err != nil {
+		return 0, err
+	}
+	if origInv.CreditOf != nil {
+		return 0, fmt.Errorf("cannot credit a credit invoice")
+	}
+	if origInv.Status == "utkast" {
+		return 0, fmt.Errorf("cannot credit an unposted invoice")
+	}
+
+	// Klonar fakturan med dagens datum
+	now := time.Now().Format("2006-01-02")
+	creditInv := models.Invoice{
+		CreditOf:         &originalID,
+		Date:             now,
+		DueDate:          now, // Kreditfakturor saknar förfallodatum
+		PaymentTermsDays: 0,
+		CustomerName:     origInv.CustomerName,
+		CustomerOrgnr:    origInv.CustomerOrgnr,
+		CustomerAddress:  origInv.CustomerAddress,
+		TotalAmount:      -origInv.TotalAmount,
+		TotalVat:         -origInv.TotalVat,
+		Status:           "utkast",
+		FiscalYearID:     origInv.FiscalYearID,
+	}
+
+	for _, item := range origInv.Items {
+		creditInv.Items = append(creditInv.Items, models.InvoiceItem{
+			Description: item.Description,
+			Quantity:    -item.Quantity, // Negativ kvantitet
+			PriceExVat:  item.PriceExVat,
+			VatRate:     item.VatRate,
+		})
+	}
+
+	return l.CreateInvoice(creditInv)
 }
 
 // GetInvoiceByID hämtar en specifik faktura och dess rader
@@ -135,6 +177,12 @@ func (l *Ledger) UpdateInvoice(inv models.Invoice) error {
 		return fmt.Errorf("WORM VIOLATION: Cannot update a posted invoice")
 	}
 
+	if inv.CreditOf != nil {
+		if inv.TotalAmount > 0 {
+			return fmt.Errorf("a credit invoice cannot have a positive total amount")
+		}
+	}
+
 	tx, err := l.db.Begin()
 	if err != nil {
 		return err
@@ -207,6 +255,27 @@ func (l *Ledger) PostInvoice(invoiceID int64, user string) error {
 		return fmt.Errorf("invoice is already posted")
 	}
 
+	if inv.CreditOf != nil {
+		if inv.TotalAmount > 0 {
+			return fmt.Errorf("a credit invoice cannot have a positive total amount")
+		}
+		
+		origInv, err := l.GetInvoiceByID(*inv.CreditOf)
+		if err != nil {
+			return fmt.Errorf("could not fetch original invoice: %w", err)
+		}
+		
+		var sumPostedCredits int64
+		err = l.db.QueryRow("SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE credit_of = ? AND status IN ('bokförd', 'betald')", *inv.CreditOf).Scan(&sumPostedCredits)
+		if err != nil {
+			return fmt.Errorf("could not sum existing credits: %w", err)
+		}
+		
+		if int64(math.Abs(float64(sumPostedCredits + inv.TotalAmount))) > origInv.TotalAmount {
+			return fmt.Errorf("cannot credit more than the original invoice amount (Total available to credit: %.2f)", float64(origInv.TotalAmount - int64(math.Abs(float64(sumPostedCredits)))) / 100.0)
+		}
+	}
+
 	tx, err := l.db.Begin()
 	if err != nil {
 		return err
@@ -232,8 +301,9 @@ func (l *Ledger) PostInvoice(invoiceID int64, user string) error {
 	vatByVat := make(map[int]int64)
 
 	for _, item := range inv.Items {
-		// Quantity is in hundredths (150 = 1.5)
-		lineExVat := (item.PriceExVat * int64(item.Quantity)) / 100
+		// Quantity is in hundredths (150 = 1.5). Calculate with floats to prevent truncation errors.
+		lineExVatFloat := (float64(item.PriceExVat) * float64(item.Quantity)) / 100.0
+		lineExVat := int64(math.Round(lineExVatFloat))
 		
 		lineVatFloat := float64(lineExVat) * float64(item.VatRate) / 100.0
 		lineVat := int64(math.Round(lineVatFloat))
@@ -276,6 +346,21 @@ func (l *Ledger) PostInvoice(invoiceID int64, user string) error {
 	
 	rows = append([]models.RowRequest{{Account: "1510", Debet: totalDebit, Kredit: 0}}, rows...)
 
+	var flippedRows []models.RowRequest
+	for _, r := range rows {
+		d := r.Debet
+		k := r.Kredit
+		if d < 0 {
+			k += -d
+			d = 0
+		}
+		if k < 0 {
+			d += -k
+			k = 0
+		}
+		flippedRows = append(flippedRows, models.RowRequest{Account: r.Account, Debet: d, Kredit: k})
+	}
+
 	// 3. Generate PDF (WORM Attachment)
 	settings, err := l.GetSettings()
 	if err != nil {
@@ -292,7 +377,7 @@ func (l *Ledger) PostInvoice(invoiceID int64, user string) error {
 		Date: inv.Date,
 		Text: fmt.Sprintf("Faktura %s - %s", newInvoiceNumber, inv.CustomerName),
 		Type: "NORMAL",
-		Rows: rows,
+		Rows: flippedRows,
 		AttachmentBase64: pdfBase64,
 	}
 
@@ -333,14 +418,38 @@ func (l *Ledger) RegisterPayment(invoiceID int64, date string, user string) erro
 	}
 	defer tx.Rollback()
 
-	// 1. Create Payment Verification
+	// 1. Calculate amount to pay (Adjust for partial credits if this is an original invoice)
+	var sumCredits int64
+	if inv.TotalAmount >= 0 && inv.CreditOf == nil {
+		err = l.db.QueryRow("SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE credit_of = ? AND status IN ('bokförd', 'betald')", invoiceID).Scan(&sumCredits)
+		if err != nil {
+			return fmt.Errorf("failed to calculate sum of credits: %w", err)
+		}
+	}
+	
+	amount := inv.TotalAmount + sumCredits
+	if amount == 0 {
+		return fmt.Errorf("this invoice has been fully credited and cannot be paid via bank")
+	}
+
+	debitAccount := "1930"
+	creditAccount := "1510"
+	text := fmt.Sprintf("Inbetalning Faktura %s", *inv.InvoiceNumber)
+
+	if amount < 0 {
+		amount = -amount
+		debitAccount = "1510"
+		creditAccount = "1930"
+		text = fmt.Sprintf("Utbetalning Kreditfaktura %s", *inv.InvoiceNumber)
+	}
+
 	req := models.VerificationRequest{
 		Date: date,
-		Text: fmt.Sprintf("Inbetalning Faktura %s", *inv.InvoiceNumber),
+		Text: text,
 		Type: "NORMAL",
 		Rows: []models.RowRequest{
-			{Account: "1930", Debet: inv.TotalAmount, Kredit: 0},
-			{Account: "1510", Debet: 0, Kredit: inv.TotalAmount},
+			{Account: debitAccount, Debet: amount, Kredit: 0},
+			{Account: creditAccount, Debet: 0, Kredit: amount},
 		},
 	}
 
@@ -353,6 +462,45 @@ func (l *Ledger) RegisterPayment(invoiceID int64, date string, user string) erro
 	_, err = tx.Exec("UPDATE invoices SET status = 'betald' WHERE id = ?", invoiceID)
 	if err != nil {
 		return fmt.Errorf("failed to update invoice status: %w", err)
+	}
+
+	return tx.Commit()
+}
+
+// SettleInvoice kvittar en kreditfaktura mot sin originalfaktura och stänger båda.
+func (l *Ledger) SettleInvoice(creditID int64) error {
+	creditInv, err := l.GetInvoiceByID(creditID)
+	if err != nil { return err }
+	if creditInv.CreditOf == nil {
+		return fmt.Errorf("not a credit invoice")
+	}
+
+	originalID := *creditInv.CreditOf
+	origInv, err := l.GetInvoiceByID(originalID)
+	if err != nil { return err }
+
+	if creditInv.Status != "bokförd" || origInv.Status != "bokförd" {
+		return fmt.Errorf("both invoices must be posted before they can be settled")
+	}
+
+	tx, err := l.db.Begin()
+	if err != nil { return err }
+	defer tx.Rollback()
+
+	var sumCredits int64
+	err = tx.QueryRow("SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE credit_of = ? AND status IN ('bokförd', 'betald')", originalID).Scan(&sumCredits)
+	if err != nil { return err }
+
+	_, err = tx.Exec("UPDATE invoices SET status = 'betald' WHERE id = ?", creditID)
+	if err != nil {
+		return fmt.Errorf("failed to settle credit invoice: %w", err)
+	}
+
+	if int64(math.Abs(float64(sumCredits))) >= origInv.TotalAmount {
+		_, err = tx.Exec("UPDATE invoices SET status = 'betald' WHERE id = ?", originalID)
+		if err != nil {
+			return fmt.Errorf("failed to settle original invoice: %w", err)
+		}
 	}
 
 	return tx.Commit()

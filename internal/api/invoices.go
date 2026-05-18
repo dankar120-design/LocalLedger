@@ -196,3 +196,37 @@ func (s *Server) HandleGetInvoicePDF(w http.ResponseWriter, r *http.Request) {
 
 	http.Redirect(w, r, "/api/attachments/"+*hash, http.StatusTemporaryRedirect)
 }
+
+func (s *Server) HandleCreditInvoice(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Ogiltigt ID", http.StatusBadRequest)
+		return
+	}
+
+	user := "System"
+	newID, err := s.ledger.CreateCreditInvoice(id, user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]int64{"id": newID})
+}
+
+func (s *Server) HandleSettleInvoice(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Ogiltigt ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.ledger.SettleInvoice(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}

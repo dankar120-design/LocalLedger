@@ -20,7 +20,7 @@ func TestPostVerification(t *testing.T) {
 
 	t.Run("Success", func(t *testing.T) {
 		workspace := setupTestWorkspace(t)
-		l, _ := OpenLedger(workspace, "v1.4.0")
+		l, _ := OpenLedger(workspace, "v2.0.0")
 		defer l.Close()
 
 		res, err := l.PostVerification("SystemTest", validReq)
@@ -34,7 +34,7 @@ func TestPostVerification(t *testing.T) {
 
 	t.Run("Invalid Date Format", func(t *testing.T) {
 		workspace := setupTestWorkspace(t)
-		l, _ := OpenLedger(workspace, "v1.4.0")
+		l, _ := OpenLedger(workspace, "v2.0.0")
 		defer l.Close()
 
 		req := validReq
@@ -47,7 +47,7 @@ func TestPostVerification(t *testing.T) {
 
 	t.Run("Invalid Rows (Length < 2)", func(t *testing.T) {
 		workspace := setupTestWorkspace(t)
-		l, _ := OpenLedger(workspace, "v1.4.0")
+		l, _ := OpenLedger(workspace, "v2.0.0")
 		defer l.Close()
 
 		req := validReq
@@ -60,7 +60,7 @@ func TestPostVerification(t *testing.T) {
 
 	t.Run("Negative amounts", func(t *testing.T) {
 		workspace := setupTestWorkspace(t)
-		l, _ := OpenLedger(workspace, "v1.4.0")
+		l, _ := OpenLedger(workspace, "v2.0.0")
 		defer l.Close()
 
 		req := validReq
@@ -76,7 +76,7 @@ func TestPostVerification(t *testing.T) {
 
 	t.Run("Zero amounts", func(t *testing.T) {
 		workspace := setupTestWorkspace(t)
-		l, _ := OpenLedger(workspace, "v1.4.0")
+		l, _ := OpenLedger(workspace, "v2.0.0")
 		defer l.Close()
 
 		req := validReq
@@ -92,7 +92,7 @@ func TestPostVerification(t *testing.T) {
 
 	t.Run("Unbalanced", func(t *testing.T) {
 		workspace := setupTestWorkspace(t)
-		l, _ := OpenLedger(workspace, "v1.4.0")
+		l, _ := OpenLedger(workspace, "v2.0.0")
 		defer l.Close()
 
 		req := validReq
@@ -108,7 +108,7 @@ func TestPostVerification(t *testing.T) {
 
 	t.Run("No Fiscal Year", func(t *testing.T) {
 		workspace := setupTestWorkspace(t)
-		l, _ := OpenLedger(workspace, "v1.4.0")
+		l, _ := OpenLedger(workspace, "v2.0.0")
 		defer l.Close()
 
 		req := validReq
@@ -121,7 +121,7 @@ func TestPostVerification(t *testing.T) {
 
 	t.Run("Locked Period", func(t *testing.T) {
 		workspace := setupTestWorkspace(t)
-		l, _ := OpenLedger(workspace, "v1.4.0")
+		l, _ := OpenLedger(workspace, "v2.0.0")
 		defer l.Close()
 
 		// Vi skapar ett lås för 2023-03 manuellt för att testa
@@ -140,7 +140,7 @@ func TestPostVerification(t *testing.T) {
 
 	t.Run("Invalid Account", func(t *testing.T) {
 		workspace := setupTestWorkspace(t)
-		l, _ := OpenLedger(workspace, "v1.4.0")
+		l, _ := OpenLedger(workspace, "v2.0.0")
 		defer l.Close()
 
 		req := validReq

@@ -10,7 +10,7 @@ import (
 func TestLockPeriod(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		workspace := setupTestWorkspace(t)
-		l, _ := OpenLedger(workspace, "v1.4.0")
+		l, _ := OpenLedger(workspace, "v2.0.0")
 		defer l.Close()
 
 		// Försegla sandboxens befintliga rader så vi får en "ren" state för testet.
@@ -47,7 +47,7 @@ func TestLockPeriod(t *testing.T) {
 
 	t.Run("InvalidFormat", func(t *testing.T) {
 		workspace := setupTestWorkspace(t)
-		l, _ := OpenLedger(workspace, "v1.4.0")
+		l, _ := OpenLedger(workspace, "v2.0.0")
 		defer l.Close()
 
 		_, err := l.LockPeriod("2023-13", "Admin")
@@ -63,7 +63,7 @@ func TestLockPeriod(t *testing.T) {
 
 	t.Run("AlreadyLocked", func(t *testing.T) {
 		workspace := setupTestWorkspace(t)
-		l, _ := OpenLedger(workspace, "v1.4.0")
+		l, _ := OpenLedger(workspace, "v2.0.0")
 		defer l.Close()
 
 		_, err := l.LockPeriod("2023-02", "Admin")
@@ -81,7 +81,7 @@ func TestLockPeriod(t *testing.T) {
 func TestLockFiscalYear(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		workspace := setupTestWorkspace(t)
-		l, _ := OpenLedger(workspace, "v1.4.0")
+		l, _ := OpenLedger(workspace, "v2.0.0")
 		defer l.Close()
 
 		// Sandboxen skapade Fiscal Year med ID 1 (2023-01-01 -> 2023-12-31)
@@ -106,7 +106,7 @@ func TestLockFiscalYear(t *testing.T) {
 
 	t.Run("NotFound", func(t *testing.T) {
 		workspace := setupTestWorkspace(t)
-		l, _ := OpenLedger(workspace, "v1.4.0")
+		l, _ := OpenLedger(workspace, "v2.0.0")
 		defer l.Close()
 
 		_, err := l.LockFiscalYear(999, "Admin")

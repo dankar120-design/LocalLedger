@@ -49,7 +49,7 @@ func TestOpenLedger(t *testing.T) {
 	t.Run("Success opening sandbox", func(t *testing.T) {
 		workspace := setupTestWorkspace(t)
 		
-		l, err := OpenLedger(workspace, "v1.4.0")
+		l, err := OpenLedger(workspace, "v2.0.0")
 		if err != nil {
 			t.Fatalf("Expected success, got error: %v", err)
 		}
@@ -71,7 +71,7 @@ func TestOpenLedger(t *testing.T) {
 	})
 
 	t.Run("Invalid path returns error", func(t *testing.T) {
-		_, err := OpenLedger("./non-existent-folder", "v1.4.0")
+		_, err := OpenLedger("./non-existent-folder", "v2.0.0")
 		if !errors.Is(err, ErrInvalidWorkspace) {
 			t.Errorf("Expected ErrInvalidWorkspace, got: %v", err)
 		}

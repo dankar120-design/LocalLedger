@@ -31,13 +31,19 @@ func GenerateInvoicePDF(inv models.Invoice, settings models.CompanySettings, inv
 	pdf.SetFont("Helvetica", "B", 16)
 	pdf.CellFormat(190, 8, tr(settings.Name), "", 1, "R", false, 0, "")
 	pdf.SetFont("Helvetica", "B", 24)
-	pdf.CellFormat(190, 12, "FAKTURA", "", 1, "R", false, 0, "")
+	if inv.TotalAmount < 0 || inv.CreditOf != nil {
+		pdf.CellFormat(190, 12, "KREDITFAKTURA", "", 1, "R", false, 0, "")
+	} else {
+		pdf.CellFormat(190, 12, "FAKTURA", "", 1, "R", false, 0, "")
+	}
 	
 	// Invoice Meta
 	pdf.SetFont("Helvetica", "", 10)
 	pdf.CellFormat(190, 5, fmt.Sprintf("Fakturanummer: %s", invoiceNumber), "", 1, "R", false, 0, "")
 	pdf.CellFormat(190, 5, fmt.Sprintf("Fakturadatum: %s", inv.Date), "", 1, "R", false, 0, "")
-	pdf.CellFormat(190, 5, fmt.Sprintf("F%srfallodatum: %s", string([]byte{246}), inv.DueDate), "", 1, "R", false, 0, "") // tr("Förfallodatum") can sometimes act weird with hardcoded strings, we use literal or tr()
+	if inv.TotalAmount >= 0 {
+		pdf.CellFormat(190, 5, fmt.Sprintf("F%srfallodatum: %s", string([]byte{246}), inv.DueDate), "", 1, "R", false, 0, "")
+	}
 
 	pdf.Ln(20)
 
@@ -81,7 +87,8 @@ func GenerateInvoicePDF(inv models.Invoice, settings models.CompanySettings, inv
 		quantityStr := fmt.Sprintf("%.2f", float64(item.Quantity)/100.0)
 		priceStr := fmt.Sprintf("%.2f", float64(item.PriceExVat)/100.0)
 		
-		lineExVat := (item.PriceExVat * int64(item.Quantity)) / 100
+		lineExVatFloat := (float64(item.PriceExVat) * float64(item.Quantity)) / 100.0
+		lineExVat := int64(math.Round(lineExVatFloat))
 		lineTotalStr := fmt.Sprintf("%.2f", float64(lineExVat)/100.0)
 		
 		pdf.CellFormat(80, 8, tr(item.Description), "1", 0, "L", false, 0, "")
@@ -103,7 +110,9 @@ func GenerateInvoicePDF(inv models.Invoice, settings models.CompanySettings, inv
 	vatBreakdown := make(map[int]int64)
 
 	for _, item := range inv.Items {
-		lineExVat := (item.PriceExVat * int64(item.Quantity)) / 100
+		lineExVatFloat := (float64(item.PriceExVat) * float64(item.Quantity)) / 100.0
+		lineExVat := int64(math.Round(lineExVatFloat))
+		
 		lineVatFloat := float64(lineExVat) * float64(item.VatRate) / 100.0
 		lineVat := int64(math.Round(lineVatFloat))
 
@@ -125,9 +134,16 @@ func GenerateInvoicePDF(inv models.Invoice, settings models.CompanySettings, inv
 		}
 	}
 
+
 	pdf.SetFont("Helvetica", "B", 12)
-	pdf.CellFormat(155, 8, "Att betala:", "", 0, "R", false, 0, "")
-	pdf.CellFormat(35, 8, fmt.Sprintf("%.2f kr", float64(grandTotal)/100.0), "", 1, "R", false, 0, "")
+	if inv.TotalAmount < 0 || inv.CreditOf != nil {
+		pdf.CellFormat(155, 8, "Er tillgodo:", "", 0, "R", false, 0, "")
+		// Visa beloppet som positivt för "Er tillgodo:"
+		pdf.CellFormat(35, 8, fmt.Sprintf("%.2f kr", float64(-grandTotal)/100.0), "", 1, "R", false, 0, "")
+	} else {
+		pdf.CellFormat(155, 8, "Att betala:", "", 0, "R", false, 0, "")
+		pdf.CellFormat(35, 8, fmt.Sprintf("%.2f kr", float64(grandTotal)/100.0), "", 1, "R", false, 0, "")
+	}
 
 	// --- Footer ---
 	pdf.SetY(-40)
@@ -147,7 +163,11 @@ func GenerateInvoicePDF(inv models.Invoice, settings models.CompanySettings, inv
 		pdf.CellFormat(64, 5, "", "", 1, "R", false, 0, "")
 	}
 
-	pdf.CellFormat(190, 5, fmt.Sprintf("Betalningsvillkor: %d dagar", settings.PaymentTermsDays), "", 1, "R", false, 0, "")
+	if inv.TotalAmount >= 0 && inv.CreditOf == nil {
+		pdf.CellFormat(190, 5, fmt.Sprintf("Betalningsvillkor: %d dagar", settings.PaymentTermsDays), "", 1, "R", false, 0, "")
+	} else {
+		pdf.CellFormat(190, 5, "Regleras enligt överenskommelse", "", 1, "R", false, 0, "")
+	}
 
 	// Output Base64
 	var buf bytes.Buffer

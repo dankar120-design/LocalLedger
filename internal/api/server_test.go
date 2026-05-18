@@ -49,7 +49,7 @@ func TestHealthEndpoint(t *testing.T) {
 	workspace := setupTestWorkspace(t)
 	
 	// Startar servern i bakgrunden. Den skapar en ny databas i workspace.
-	srv, err := Start(workspace, 0)
+	srv, err := Start(workspace, 0, false, true)
 	if err != nil {
 		t.Fatalf("Failed to start server: %v", err)
 	}

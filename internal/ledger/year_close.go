@@ -40,6 +40,21 @@ func (l *Ledger) GenerateOpeningBalance(user string, fromYearID, toYearID int64)
 		return ErrFiscalYearLocked
 	}
 
+	// Pre-condition: Kontrollera att hela huvudboken (klass 1-8) balanserar exakt över året.
+	var totalSystemBalance int64
+	err = l.db.QueryRow(`
+		SELECT COALESCE(SUM(r.debet - r.kredit), 0)
+		FROM verification_rows r
+		JOIN verifications v ON r.verification_id = v.id
+		WHERE v.date >= ? AND v.date <= ?
+	`, fromStart, fromEnd).Scan(&totalSystemBalance)
+	if err != nil {
+		return fmt.Errorf("failed to calculate system integrity: %w", err)
+	}
+	if totalSystemBalance != 0 {
+		return fmt.Errorf("LEDGER CORRUPTION: Huvudboken är korrupt! Summan av debet och kredit över alla konton under året är inte noll (diff: %.2f kr)", float64(totalSystemBalance)/100.0)
+	}
+
 	// Hämta UB för alla balans-konton (Klass 1 och 2)
 	query := `
 		SELECT 

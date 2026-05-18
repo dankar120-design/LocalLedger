@@ -9,7 +9,7 @@ import (
 func TestSealVerifications(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		workspace := setupTestWorkspace(t)
-		l, _ := OpenLedger(workspace, "v1.4.0")
+		l, _ := OpenLedger(workspace, "v2.0.0")
 		defer l.Close()
 
 		// Försegla sandboxens befintliga rader så vi får en "ren" state för testet.
@@ -54,7 +54,7 @@ func TestSealVerifications(t *testing.T) {
 
 	t.Run("Empty", func(t *testing.T) {
 		workspace := setupTestWorkspace(t)
-		l, _ := OpenLedger(workspace, "v1.4.0")
+		l, _ := OpenLedger(workspace, "v2.0.0")
 		defer l.Close()
 
 		// Försegla initial state
@@ -73,7 +73,7 @@ func TestSealVerifications(t *testing.T) {
 
 func TestVerifyChain_Tampered(t *testing.T) {
 	workspace := setupTestWorkspace(t)
-	l, _ := OpenLedger(workspace, "v1.4.0")
+	l, _ := OpenLedger(workspace, "v2.0.0")
 	defer l.Close()
 
 	// 1. Skapa och lås en verifikation
@@ -111,7 +111,7 @@ func TestVerifyChain_Tampered(t *testing.T) {
 
 func TestDatabaseTrigger_BlocksUpdate(t *testing.T) {
 	workspace := setupTestWorkspace(t)
-	l, _ := OpenLedger(workspace, "v1.4.0")
+	l, _ := OpenLedger(workspace, "v2.0.0")
 	defer l.Close()
 
 	// 1. Skapa och lås

@@ -29,7 +29,7 @@ func performRequest(srv *Server, method, path string, body interface{}) *httptes
 
 func TestPostVerificationAPI(t *testing.T) {
 	workspace := setupTestWorkspace(t)
-	srv, _ := Start(workspace, 0)
+	srv, _ := Start(workspace, 0, false, true)
 	defer srv.ledger.Close()
 	defer srv.httpServer.Close()
 
@@ -70,7 +70,7 @@ func TestPostVerificationAPI(t *testing.T) {
 
 func TestLockPeriodAPI(t *testing.T) {
 	workspace := setupTestWorkspace(t)
-	srv, _ := Start(workspace, 0)
+	srv, _ := Start(workspace, 0, false, true)
 	defer srv.ledger.Close()
 	defer srv.httpServer.Close()
 
@@ -89,7 +89,7 @@ func TestLockPeriodAPI(t *testing.T) {
 
 func TestGetVerificationsAPI(t *testing.T) {
 	workspace := setupTestWorkspace(t)
-	srv, _ := Start(workspace, 0)
+	srv, _ := Start(workspace, 0, false, true)
 	defer srv.ledger.Close()
 	defer srv.httpServer.Close()
 

@@ -3,19 +3,32 @@ package ledger
 import (
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"localledger/internal/models"
 )
 
+type VatBoxes struct {
+	Box05 int64 `json:"box_05"` // Försäljning 25% (3000, 3001, 3010, 3011, 3020, 3040, 3041)
+	Box06 int64 `json:"box_06"` // Försäljning 12% (3002, 3042)
+	Box07 int64 `json:"box_07"` // Försäljning 6% (3003, 3043)
+	Box10 int64 `json:"box_10"` // Utgående moms 25% (2610, 2611)
+	Box11 int64 `json:"box_11"` // Utgående moms 12% (2620)
+	Box12 int64 `json:"box_12"` // Utgående moms 6% (2630)
+	Box20 int64 `json:"box_20"` // Inköp varor EU (4515)
+	Box21 int64 `json:"box_21"` // Inköp tjänster EU (4531)
+	Box30 int64 `json:"box_30"` // Utgående moms på EU-förvärv (2614)
+	Box48 int64 `json:"box_48"` // Ingående moms (2640, 2641, 2645)
+}
+
 type VatReport struct {
-	StartDate   string `json:"start_date"`
-	EndDate     string `json:"end_date"`
-	TotalSales  int64  `json:"total_sales"`
-	OutgoingVat int64  `json:"outgoing_vat"` // Utgående moms (skuld, kredit)
-	IncomingVat int64  `json:"incoming_vat"` // Ingående moms (fordran, debet)
-	NetVat      int64  `json:"net_vat"`      // Positiv = att betala, Negativ = få tillbaka
+	StartDate   string   `json:"start_date"`
+	EndDate     string   `json:"end_date"`
+	TotalSales  int64    `json:"total_sales"`  // Bevarad för UI-bakåtkompatibilitet
+	OutgoingVat int64    `json:"outgoing_vat"` // Bevarad för UI-bakåtkompatibilitet
+	IncomingVat int64    `json:"incoming_vat"` // Bevarad för UI-bakåtkompatibilitet
+	NetVat      int64    `json:"net_vat"`      // Bevarad för UI-bakåtkompatibilitet
+	Boxes       VatBoxes `json:"boxes"`
 }
 
 // GetVatReport genererar en summering av moms och försäljning för en given period.
@@ -39,7 +52,8 @@ func (l *Ledger) GetVatReport(startDate, endDate string) (*VatReport, error) {
 		EndDate:   endDate,
 	}
 
-	// Hämta summor för moms och försäljning
+	// Vi hämtar exakt de konton vi har strikt stöd för i svensk momsredovisning.
+	// Försäljningskonton täcker standardscenarier, inklusive provisionerade konton.
 	query := `
 		SELECT 
 			a.code, 
@@ -49,6 +63,11 @@ func (l *Ledger) GetVatReport(startDate, endDate string) (*VatReport, error) {
 		JOIN verifications v ON r.verification_id = v.id
 		JOIN accounts a ON r.account = a.code
 		WHERE v.date >= ? AND v.date <= ?
+		  AND a.code IN (
+			'3000', '3001', '3002', '3003', '3010', '3011', '3020', '3040', '3041', '3042', '3043',
+			'4515', '4531',
+			'2610', '2611', '2614', '2620', '2621', '2630', '2631', '2640', '2641', '2645'
+		  )
 		GROUP BY a.code
 		HAVING total_debet > 0 OR total_kredit > 0
 	`
@@ -66,16 +85,56 @@ func (l *Ledger) GetVatReport(startDate, endDate string) (*VatReport, error) {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 
-		balance := kredit - debet // Standrad för skulder och intäkter
+		balance := kredit - debet     // Standard för skulder och intäkter
+		costBalance := debet - kredit // Standard för kostnader och tillgångar
 
-		if strings.HasPrefix(code, "3") {
+		switch code {
+		// Ruta 05: Försäljning 25% (inkl. standard varuförsäljning 3010, 3020)
+		case "3000", "3001", "3010", "3011", "3020", "3040", "3041":
+			report.Boxes.Box05 += balance
 			report.TotalSales += balance
-		} else if strings.HasPrefix(code, "261") || strings.HasPrefix(code, "262") || strings.HasPrefix(code, "263") {
-			report.OutgoingVat += balance // Skuld, normalt positiv
-		} else if strings.HasPrefix(code, "264") {
-			// Ingående moms är fordran (debet), så vi vill ha det som positivt värde för presentationen
-			report.IncomingVat += (debet - kredit)
+		// Ruta 06: Försäljning 12%
+		case "3002", "3042":
+			report.Boxes.Box06 += balance
+			report.TotalSales += balance
+		// Ruta 07: Försäljning 6%
+		case "3003", "3043":
+			report.Boxes.Box07 += balance
+			report.TotalSales += balance
+
+		// Ruta 20, 21: EU-inköp (Redovisas som positivt inköpsbelopp)
+		case "4515":
+			report.Boxes.Box20 += costBalance
+		case "4531":
+			report.Boxes.Box21 += costBalance
+
+		// Ruta 10: Utgående moms 25%
+		case "2610", "2611":
+			report.Boxes.Box10 += balance
+			report.OutgoingVat += balance
+		// Ruta 11: Utgående moms 12%
+		case "2620", "2621":
+			report.Boxes.Box11 += balance
+			report.OutgoingVat += balance
+		// Ruta 12: Utgående moms 6%
+		case "2630", "2631":
+			report.Boxes.Box12 += balance
+			report.OutgoingVat += balance
+
+		// Ruta 30: Utgående moms omvänd skattskyldighet
+		case "2614":
+			report.Boxes.Box30 += balance
+			report.OutgoingVat += balance
+
+		// Ruta 48: Ingående moms
+		case "2640", "2641", "2645":
+			report.Boxes.Box48 += costBalance
+			report.IncomingVat += costBalance
 		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over vat report rows: %w", err)
 	}
 
 	report.NetVat = report.OutgoingVat - report.IncomingVat
@@ -108,7 +167,7 @@ func (l *Ledger) TransferVat(user, startDate, endDate string) error {
 		return ErrFiscalYearLocked
 	}
 
-	// 3. Hämta alla momskonton som har saldo
+	// 3. Hämta alla momskonton som har saldo baserat på strikt godkända momskonton.
 	query := `
 		SELECT 
 			a.code, 
@@ -116,12 +175,7 @@ func (l *Ledger) TransferVat(user, startDate, endDate string) error {
 		FROM verification_rows r
 		JOIN verifications v ON r.verification_id = v.id
 		JOIN accounts a ON r.account = a.code
-		WHERE v.date >= ? AND v.date <= ? AND (
-			a.code LIKE '261%' OR 
-			a.code LIKE '262%' OR 
-			a.code LIKE '263%' OR 
-			a.code LIKE '264%'
-		)
+		WHERE v.date >= ? AND v.date <= ? AND a.code IN ('2610', '2611', '2614', '2620', '2621', '2630', '2631', '2640', '2641', '2645')
 		GROUP BY a.code
 		HAVING balance_debet != 0
 	`
@@ -157,6 +211,10 @@ func (l *Ledger) TransferVat(user, startDate, endDate string) error {
 			})
 			netVatBalance += (-balanceDebet)
 		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating over vat balance rows: %w", err)
 	}
 
 	if len(verificationRows) == 0 {

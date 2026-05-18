@@ -11,7 +11,7 @@ func TestSIERoundtrip(t *testing.T) {
 	if err := InitWorkspace(dir1); err != nil {
 		t.Fatalf("Failed to init workspace: %v", err)
 	}
-	l1, err := OpenLedger(dir1, "v1.4.0")
+	l1, err := OpenLedger(dir1, "v2.0.0")
 	if err != nil {
 		t.Fatalf("Failed to open original ledger: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestSIERoundtrip(t *testing.T) {
 	if err := InitWorkspace(dir2); err != nil {
 		t.Fatalf("Failed to init destination workspace: %v", err)
 	}
-	l2, err := OpenLedger(dir2, "v1.4.0")
+	l2, err := OpenLedger(dir2, "v2.0.0")
 	if err != nil {
 		t.Fatalf("Failed to open destination ledger: %v", err)
 	}

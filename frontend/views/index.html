@@ -440,40 +440,100 @@
                     
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
                         <div style="background: white; padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border);">
-                            <div style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.5rem;">Skattepliktig Försäljning</div>
+                            <div style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.5rem;">Skattepliktig Försäljning (Exakt Bokfört Värde)</div>
                             <div style="font-size: 1.5rem; font-weight: 600;" x-text="(vatReport.total_sales / 100).toFixed(2) + ' kr'"></div>
-                            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">Konto 3XXX (Underlag för Ruta 05/06/07)</div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">Konto 3XXX (Totalt underlag före avrundning)</div>
                         </div>
                         
                         <div style="background: white; padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border);">
-                            <div style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.5rem;" x-text="netVatText"></div>
+                            <div style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.5rem;" x-text="netVatText + ' (Exakt Bokfört Värde)'"></div>
                             <div style="font-size: 1.5rem; font-weight: 600; color: var(--primary);" x-text="(Math.abs(vatReport.net_vat) / 100).toFixed(2) + ' kr'"></div>
-                            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">Detta belopp bokas mot 2650 vid omföring.</div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">Detta exakta belopp (inklusive ören) bokas mot 2650 vid omföring.</div>
                         </div>
                     </div>
 
-                    <table style="margin-bottom: 2rem;">
-                        <thead>
-                            <tr>
-                                <th>Åtgärd</th>
-                                <th style="text-align: right;">Belopp</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>Utgående moms (Moms på försäljning) <br><small style="color: var(--text-muted);">Kontoklass 261, 262, 263</small></td>
-                                <td style="text-align: right; font-weight: 500;" x-text="(vatReport.outgoing_vat / 100).toFixed(2) + ' kr'"></td>
-                            </tr>
-                            <tr>
-                                <td>Ingående moms (Moms på inköp) <br><small style="color: var(--text-muted);">Kontoklass 264</small></td>
-                                <td style="text-align: right; font-weight: 500;" x-text="'-' + (vatReport.incoming_vat / 100).toFixed(2) + ' kr'"></td>
-                            </tr>
-                            <tr style="background: var(--bg);">
-                                <td><strong>Nettomoms</strong></td>
-                                <td style="text-align: right; font-weight: 600;" x-text="(vatReport.net_vat / 100).toFixed(2) + ' kr'"></td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div style="margin-bottom: 2rem; border-radius: 8px; border: 1px solid var(--border); overflow: hidden;">
+                        <div style="background: var(--bg); padding: 1rem; border-bottom: 1px solid var(--border); font-weight: bold;">Deklarationsunderlag (Hela kronor)</div>
+                        <table style="margin-bottom: 0;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 10%;">Ruta</th>
+                                    <th>Beskrivning</th>
+                                    <th style="text-align: right;">Belopp</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Ruta 05 -->
+                                <tr>
+                                    <td><strong>05</strong></td>
+                                    <td>Momspliktig försäljning som inte ingår i annan ruta, 25 %</td>
+                                    <td style="text-align: right; font-weight: 500;" x-text="skv(vatReport.boxes.box_05) + ' kr'"></td>
+                                </tr>
+                                <!-- Ruta 06 -->
+                                <tr x-show="vatReport.boxes.box_06 !== 0" x-cloak>
+                                    <td><strong>06</strong></td>
+                                    <td>Momspliktig försäljning som inte ingår i annan ruta, 12 %</td>
+                                    <td style="text-align: right; font-weight: 500;" x-text="skv(vatReport.boxes.box_06) + ' kr'"></td>
+                                </tr>
+                                <!-- Ruta 07 -->
+                                <tr x-show="vatReport.boxes.box_07 !== 0" x-cloak>
+                                    <td><strong>07</strong></td>
+                                    <td>Momspliktig försäljning som inte ingår i annan ruta, 6 %</td>
+                                    <td style="text-align: right; font-weight: 500;" x-text="skv(vatReport.boxes.box_07) + ' kr'"></td>
+                                </tr>
+
+                                <!-- Ruta 10 -->
+                                <tr>
+                                    <td><strong>10</strong></td>
+                                    <td>Utgående moms på försäljning eller uttag i ruta 05, 25 %</td>
+                                    <td style="text-align: right; font-weight: 500;" x-text="skv(vatReport.boxes.box_10) + ' kr'"></td>
+                                </tr>
+                                <!-- Ruta 11 -->
+                                <tr x-show="vatReport.boxes.box_11 !== 0" x-cloak>
+                                    <td><strong>11</strong></td>
+                                    <td>Utgående moms på försäljning eller uttag i ruta 06, 12 %</td>
+                                    <td style="text-align: right; font-weight: 500;" x-text="skv(vatReport.boxes.box_11) + ' kr'"></td>
+                                </tr>
+                                <!-- Ruta 12 -->
+                                <tr x-show="vatReport.boxes.box_12 !== 0" x-cloak>
+                                    <td><strong>12</strong></td>
+                                    <td>Utgående moms på försäljning eller uttag i ruta 07, 6 %</td>
+                                    <td style="text-align: right; font-weight: 500;" x-text="skv(vatReport.boxes.box_12) + ' kr'"></td>
+                                </tr>
+
+                                <!-- Ruta 20 -->
+                                <tr x-show="vatReport.boxes.box_20 !== 0" x-cloak>
+                                    <td><strong>20</strong></td>
+                                    <td>Inköp av varor från ett annat EU-land</td>
+                                    <td style="text-align: right; font-weight: 500;" x-text="skv(vatReport.boxes.box_20) + ' kr'"></td>
+                                </tr>
+                                <!-- Ruta 21 -->
+                                <tr x-show="vatReport.boxes.box_21 !== 0" x-cloak>
+                                    <td><strong>21</strong></td>
+                                    <td>Inköp av tjänster från ett annat EU-land, enligt huvudregeln</td>
+                                    <td style="text-align: right; font-weight: 500;" x-text="skv(vatReport.boxes.box_21) + ' kr'"></td>
+                                </tr>
+                                <!-- Ruta 30 -->
+                                <tr x-show="vatReport.boxes.box_30 !== 0" x-cloak>
+                                    <td><strong>30</strong></td>
+                                    <td>Utgående moms på förvärv från utlandet</td>
+                                    <td style="text-align: right; font-weight: 500;" x-text="skv(vatReport.boxes.box_30) + ' kr'"></td>
+                                </tr>
+
+                                <!-- Ruta 48 -->
+                                <tr>
+                                    <td><strong>48</strong></td>
+                                    <td>Ingående moms att dra av</td>
+                                    <td style="text-align: right; font-weight: 500;" x-text="skv(vatReport.boxes.box_48) + ' kr'"></td>
+                                </tr>
+                                
+                                <tr style="background: var(--bg);">
+                                    <td colspan="2"><strong>Moms att betala eller få tillbaka (SKV Avrundat)</strong></td>
+                                    <td style="text-align: right; font-weight: 600; color: var(--primary);" x-text="(skv(vatReport.boxes.box_10) + skv(vatReport.boxes.box_11) + skv(vatReport.boxes.box_12) + skv(vatReport.boxes.box_30) - skv(vatReport.boxes.box_48)) + ' kr'"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
 
                     <div style="display: flex; justify-content: flex-end; align-items: center; gap: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
                         <span style="font-size: 0.9rem; color: var(--text-muted);">Verifikation skapas på slutdatumet (<span x-text="vatEndDate"></span>)</span>
@@ -670,11 +730,18 @@
                     <template x-if="selectedInvoice && selectedInvoice.status === 'utkast'">
                         <form @submit.prevent="saveInvoice" style="display: flex; flex-direction: column; gap: 1rem;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem;">
-                                <h3 x-text="selectedInvoice.id ? 'Redigera Utkast' : 'Ny Faktura'"></h3>
+                                <div>
+                                    <h3 x-text="selectedInvoice.id ? 'Redigera Utkast' : 'Ny Faktura'"></h3>
+                                    <template x-if="selectedInvoice.credit_of">
+                                        <div style="margin-top: 0.5rem; background-color: var(--bg-body); color: var(--danger); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--danger); font-weight: 500; font-size: 0.875rem;">
+                                            Detta är en Kreditfaktura avseende originalfaktura #<span x-text="selectedInvoice.credit_of"></span>
+                                        </div>
+                                    </template>
+                                </div>
                                 <div style="display: flex; gap: 0.5rem;">
                                     <button type="button" @click="deleteInvoice" x-show="selectedInvoice.id" class="btn btn-danger">Radera</button>
                                     <button type="submit" class="btn btn-secondary">Spara Utkast</button>
-                                    <button type="button" @click="postInvoice" x-show="selectedInvoice.id" :disabled="selectedInvoice.total_amount === 0" class="btn primary" :style="selectedInvoice.total_amount === 0 ? 'opacity: 0.5; cursor: not-allowed;' : ''">Bokför (Lås)</button>
+                                    <button type="button" @click="postInvoice" x-show="selectedInvoice.id" :disabled="selectedInvoice.total_amount > 0 && selectedInvoice.credit_of != null || selectedInvoice.total_amount === 0 && selectedInvoice.credit_of == null" class="btn primary" :style="(selectedInvoice.total_amount > 0 && selectedInvoice.credit_of != null || selectedInvoice.total_amount === 0 && selectedInvoice.credit_of == null) ? 'opacity: 0.5; cursor: not-allowed;' : ''">Bokför (Lås)</button>
                                 </div>
                             </div>
 
@@ -682,11 +749,11 @@
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                                 <div style="grid-column: span 2;">
                                     <label>Kundnamn</label>
-                                    <input x-model="selectedInvoice.customer_name" required type="text" class="form-control" style="width: 100%;">
+                                    <input x-model="selectedInvoice.customer_name" :disabled="selectedInvoice.credit_of" required type="text" class="form-control" style="width: 100%;">
                                 </div>
                                 <div>
                                     <label>Org.nr (Valfritt)</label>
-                                    <input x-model="selectedInvoice.customer_orgnr" type="text" class="form-control" style="width: 100%;">
+                                    <input x-model="selectedInvoice.customer_orgnr" :disabled="selectedInvoice.credit_of" type="text" class="form-control" style="width: 100%;">
                                 </div>
                                 <div>
                                     <label>Fakturadatum</label>
@@ -694,9 +761,9 @@
                                 </div>
                                 <div style="grid-column: span 2;">
                                     <label>Adress</label>
-                                    <input x-model="selectedInvoice.customer_address" required type="text" class="form-control" style="width: 100%;">
+                                    <input x-model="selectedInvoice.customer_address" :disabled="selectedInvoice.credit_of" required type="text" class="form-control" style="width: 100%;">
                                 </div>
-                                <div style="grid-column: span 2;">
+                                <div style="grid-column: span 2;" x-show="!selectedInvoice.credit_of">
                                     <label>Betalningsvillkor (dagar)</label>
                                     <input x-model.number="selectedInvoice.payment_terms_days" required type="number" min="0" @input="updateInvoiceDueDate()" class="form-control" style="width: 100%;">
                                 </div>
@@ -706,18 +773,18 @@
                             <div style="margin-top: 1.5rem;">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0.5rem;">
                                     <h4 style="font-weight: 600;">Rader</h4>
-                                    <button type="button" @click="addInvoiceItem" style="font-size: 0.875rem; color: var(--primary); background: transparent; border: none; cursor: pointer;">+ Lägg till rad</button>
+                                    <button type="button" x-show="!selectedInvoice.credit_of" @click="addInvoiceItem" style="font-size: 0.875rem; color: var(--primary); background: transparent; border: none; cursor: pointer;">+ Lägg till rad</button>
                                 </div>
                                 
                                 <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                                     <template x-for="(item, index) in selectedInvoice.items" :key="index">
                                         <div style="display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.75rem; background: var(--bg-body); border: 1px solid var(--border); border-radius: 4px;">
                                             <div style="flex: 1; display: flex; flex-direction: column; gap: 0.5rem;">
-                                                <input x-model="item.description" placeholder="Beskrivning" required class="form-control" style="width: 100%;">
+                                                <input x-model="item.description" :disabled="selectedInvoice.credit_of" placeholder="Beskrivning" required class="form-control" style="width: 100%;">
                                                 <div style="display: flex; gap: 0.5rem;">
-                                                    <input x-model.number="item.quantity_float" @input="recalcInvoice" type="number" step="0.01" min="0" placeholder="Antal" required class="form-control" style="width: 80px;">
-                                                    <input x-model.number="item.price_float" @input="recalcInvoice" type="number" step="0.01" min="0" placeholder="A-pris exkl. moms" required class="form-control" style="width: 120px;">
-                                                    <select x-model.number="item.vat_rate" @change="recalcInvoice" class="form-control" style="width: 110px;">
+                                                    <input x-model.number="item.quantity_float" @input="recalcInvoice" type="number" step="0.01" :max="selectedInvoice.credit_of ? 0 : null" :min="selectedInvoice.credit_of ? null : 0" placeholder="Antal" required class="form-control" style="width: 80px;">
+                                                    <input x-model.number="item.price_float" :disabled="selectedInvoice.credit_of" @input="recalcInvoice" type="number" step="0.01" min="0" placeholder="A-pris exkl. moms" required class="form-control" style="width: 120px;">
+                                                    <select x-model.number="item.vat_rate" :disabled="selectedInvoice.credit_of" @change="recalcInvoice" class="form-control" style="width: 110px;">
                                                         <option value="25">25% Moms</option>
                                                         <option value="12">12% Moms</option>
                                                         <option value="6">6% Moms</option>
@@ -737,7 +804,7 @@
                                 <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                                     <span style="color: var(--text-muted);">Summa exkl. moms:</span>
                                     <span style="color: var(--text-muted);">Total moms:</span>
-                                    <span style="font-weight: bold; font-size: 1rem; margin-top: 0.25rem; color: var(--text-main);">Att betala:</span>
+                                    <span style="font-weight: bold; font-size: 1rem; margin-top: 0.25rem; color: var(--text-main);" x-text="selectedInvoice.credit_of ? 'Er tillgodo:' : 'Att betala:'"></span>
                                 </div>
                                 <div style="display: flex; flex-direction: column; gap: 0.25rem; text-align: right;">
                                     <span x-text="formatMoneyFloat((selectedInvoice.total_amount - selectedInvoice.total_vat) / 100)"></span>
@@ -753,14 +820,29 @@
                         <div style="display: flex; flex-direction: column; gap: 1.5rem;">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border); padding-bottom: 1rem;">
                                 <div>
-                                    <h2 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 0.25rem;" x-text="'Faktura ' + selectedInvoice.invoice_number"></h2>
+                                    <h2 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 0.25rem;" x-text="(selectedInvoice.credit_of ? 'Kreditfaktura ' : 'Faktura ') + selectedInvoice.invoice_number"></h2>
                                     <span class="status-badge" :class="'status-' + selectedInvoice.status" x-text="selectedInvoice.status"></span>
+                                    <template x-if="selectedInvoice.credit_of">
+                                        <div style="margin-top: 0.5rem; background-color: var(--bg-body); color: var(--danger); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--danger); font-weight: 500; font-size: 0.875rem;">
+                                            Avser faktura #<span x-text="selectedInvoice.credit_of"></span>
+                                        </div>
+                                    </template>
                                 </div>
                                 <div style="display: flex; gap: 0.5rem;">
                                     <template x-if="selectedInvoice.status === 'bokförd'">
-                                        <button @click="payInvoice" class="btn" style="background-color: #10b981; color: white;">Registrera Betalning</button>
+                                        <div style="display: flex; gap: 0.5rem;">
+                                            <template x-if="!selectedInvoice.credit_of">
+                                                <button @click="payInvoice" class="btn" style="background-color: #10b981; color: white;">Registrera Betalning</button>
+                                            </template>
+                                            <template x-if="selectedInvoice.credit_of">
+                                                <button @click="settleInvoice(selectedInvoice.id)" class="btn" style="background-color: #6366f1; color: white;">Kvitta mot original</button>
+                                            </template>
+                                        </div>
                                     </template>
-                                    <a :href="'/api/invoices/' + selectedInvoice.id + '/pdf'" target="_blank" class="btn btn-secondary">Visa PDF</a>
+                                    <template x-if="(selectedInvoice.status === 'bokförd' || selectedInvoice.status === 'betald') && !selectedInvoice.credit_of">
+                                        <button type="button" @click="creditInvoice(selectedInvoice.id)" class="btn btn-danger">Skapa Kreditfaktura</button>
+                                    </template>
+                                    <button type="button" @click="downloadInvoicePDF(selectedInvoice.id)" class="btn btn-secondary">Ladda ner PDF</button>
                                 </div>
                             </div>
 

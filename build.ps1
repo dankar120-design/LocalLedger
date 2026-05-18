@@ -11,8 +11,5 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-Write-Host "Kopierar sandbox_seed.sql för fristående exekvering..." -ForegroundColor Yellow
-Copy-Item -Path "internal\ledger\sandbox_seed.sql" -Destination ".\sandbox_seed.sql" -Force
-
 Write-Host "Bygget klart!" -ForegroundColor Green
 Pause

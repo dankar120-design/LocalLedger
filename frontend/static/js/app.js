@@ -29,6 +29,7 @@ document.addEventListener('alpine:init', () => {
         isSealing: false,
         bugLog: [],
         armedActionId: null,
+        invoiceAbortController: null,
 
         confirmModal: { 
             show: false, 
@@ -124,17 +125,280 @@ document.addEventListener('alpine:init', () => {
             }
         },
         
+        async fetchInvoices() {
+            try {
+                const res = await this.authFetch('/api/invoices');
+                if (res.ok) {
+                    this.invoices = await res.json() || [];
+                }
+            } catch (e) {
+                this.showToast('Fel vid hämtning av fakturor', 'error');
+            }
+        },
+
+        createNewInvoice() {
+            const today = new Date().toISOString().split('T')[0];
+            const dueDate = new Date();
+            dueDate.setDate(dueDate.getDate() + 30);
+            this.selectedInvoice = {
+                id: 0,
+                customer_name: '',
+                customer_orgnr: '',
+                customer_address: '',
+                date: today,
+                due_date: dueDate.toISOString().split('T')[0],
+                payment_terms_days: 30,
+                items: [
+                    { description: '', quantity: 100, price_ex_vat: 0, vat_rate: 25, quantity_float: 1, price_float: 0 }
+                ],
+                total_amount: 0,
+                total_vat: 0,
+                status: 'utkast'
+            };
+        },
+
+        async selectInvoice(inv) {
+            if (this.invoiceAbortController) {
+                this.invoiceAbortController.abort();
+            }
+            this.invoiceAbortController = new AbortController();
+
+            try {
+                // Fetch full invoice with items from backend
+                const res = await this.authFetch(`/api/invoices/${inv.id}`, {
+                    signal: this.invoiceAbortController.signal
+                });
+                if (!res.ok) throw new Error("Kunde inte hämta fakturadetaljer");
+                
+                let clone = await res.json();
+                if (clone.items) {
+                    clone.items.forEach(item => {
+                        item.quantity_float = item.quantity / 100;
+                        item.price_float = item.price_ex_vat / 100;
+                    });
+                } else {
+                    clone.items = [];
+                }
+                this.selectedInvoice = clone;
+            } catch (e) {
+                if (e.name === 'AbortError') return; // Ignore aborted fetches
+                this.showToast('Fel vid hämtning av fakturadetaljer', 'error');
+            }
+        },
+
+        addInvoiceItem() {
+            if (!this.selectedInvoice) return;
+            this.selectedInvoice.items.push({ description: '', quantity: 100, price_ex_vat: 0, vat_rate: 25, quantity_float: 1, price_float: 0 });
+            this.recalcInvoice();
+        },
+
+        removeInvoiceItem(index) {
+            if (!this.selectedInvoice) return;
+            if (this.selectedInvoice.items.length > 1) {
+                this.selectedInvoice.items.splice(index, 1);
+                this.recalcInvoice();
+            }
+        },
+
+        updateInvoiceDueDate() {
+            if (!this.selectedInvoice || !this.selectedInvoice.date) return;
+            const d = new Date(this.selectedInvoice.date);
+            d.setDate(d.getDate() + (this.selectedInvoice.payment_terms_days || 0));
+            this.selectedInvoice.due_date = d.toISOString().split('T')[0];
+        },
+
+        recalcInvoice() {
+            if (!this.selectedInvoice) return;
+            let totalAmount = 0;
+            let totalVat = 0;
+            
+            this.selectedInvoice.items.forEach(item => {
+                // Konvertera float input till backend format
+                item.quantity = Math.round((item.quantity_float || 0) * 100);
+                item.price_ex_vat = Math.round((item.price_float || 0) * 100);
+                
+                let lineExVat = Math.round((item.price_ex_vat * item.quantity) / 100);
+                let lineVat = Math.round((lineExVat * item.vat_rate) / 100);
+                totalAmount += (lineExVat + lineVat);
+                totalVat += lineVat;
+            });
+            
+            this.selectedInvoice.total_amount = totalAmount;
+            this.selectedInvoice.total_vat = totalVat;
+        },
+
+        async saveInvoice() {
+            if (!this.selectedInvoice.customer_name) {
+                this.showToast('Kundnamn saknas', 'error');
+                return;
+            }
+            
+            this.recalcInvoice(); // Säkra konvertering
+            
+            const payload = JSON.parse(JSON.stringify(this.selectedInvoice));
+            
+            const url = payload.id ? `/api/invoices/${payload.id}` : '/api/invoices';
+            const method = payload.id ? 'PUT' : 'POST';
+
+            try {
+                const res = await this.authFetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    this.showToast('Utkast sparat', 'success');
+                    if (!payload.id) {
+                        const data = await res.json();
+                        this.selectedInvoice.id = data.id; // Uppdatera med nya ID:t
+                    }
+                    this.fetchInvoices();
+                } else {
+                    const err = await res.text();
+                    this.showToast('Kunde inte spara: ' + err, 'error');
+                }
+            } catch (e) {
+                this.showToast('Nätverksfel', 'error');
+            }
+        },
+
+        async postInvoice() {
+            if (!this.selectedInvoice) return;
+            const id = this.selectedInvoice.id;
+            if (!id || id === 0) {
+                this.showToast('Du måste spara utkastet innan det kan bokföras.', 'error');
+                return;
+            }
+            if (!await this.confirmAction("När du bokför fakturan skapas en låst WORM-verifikation och ett PDF-kvitto. Fakturan kan därefter inte längre ändras.", "Bokför Faktura", "Lås & Bokför", true)) return;
+            try {
+                const res = await this.authFetch(`/api/invoices/${id}/post`, { method: 'POST' });
+                if (res.ok) {
+                    this.showToast('Faktura bokförd!', 'success');
+                    this.fetchInvoices();
+                    this.fetchVerifications();
+                    this.fetchDashboardData();
+                    this.selectedInvoice = null; // Stäng vyn för att force-refresh
+                } else {
+                    this.showToast('Ett fel uppstod: ' + await res.text(), 'error');
+                }
+            } catch (e) {
+                this.showToast('Nätverksfel', 'error');
+            }
+        },
+
+        async payInvoice() {
+            if (!this.selectedInvoice || !this.selectedInvoice.id) return;
+            const id = this.selectedInvoice.id;
+            const today = new Date().toISOString().split('T')[0];
+            const date = prompt("Vänligen ange datum (ÅÅÅÅ-MM-DD) när inbetalningen mottogs på bankkontot (1930):", today);
+            if (!date) return;
+            
+            const d = new Date(date);
+            if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== date) {
+                this.showToast("Ogiltigt datumformat.", 'error');
+                return;
+            }
+
+            try {
+                const res = await this.authFetch(`/api/invoices/${id}/pay`, { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: date }) 
+                });
+                
+                if (res.ok) {
+                    this.showToast('Betalning registrerad', 'success');
+                    this.fetchInvoices();
+                    this.fetchVerifications();
+                    this.fetchDashboardData();
+                    this.selectedInvoice = null;
+                } else {
+                    this.showToast('Kunde inte registrera: ' + await res.text(), 'error');
+                }
+            } catch (e) {
+                this.showToast('Nätverksfel', 'error');
+            }
+        },
+
+        async creditInvoice(id) {
+            if (!await this.confirmAction("Vill du skapa en kreditfaktura för denna faktura?", "Skapa Kreditfaktura", "Ja, kreditera")) return;
+            try {
+                const res = await this.authFetch(`/api/invoices/${id}/credit`, { method: 'POST' });
+                if (res.ok) {
+                    const data = await res.json();
+                    this.showToast('Kreditfaktura skapad som utkast', 'success');
+                    this.fetchInvoices();
+                    this.selectInvoice({ id: data.id });
+                } else {
+                    this.showToast('Kunde inte kreditera: ' + await res.text(), 'error');
+                }
+            } catch (e) {
+                this.showToast('Nätverksfel', 'error');
+            }
+        },
+
+        async settleInvoice(id) {
+            if (!await this.confirmAction("Vill du kvitta denna kreditfaktura mot originalfakturan? (Inga pengar bokförs över bankkontot)", "Kvitta mot original", "Ja, Kvitta")) return;
+            try {
+                const res = await this.authFetch(`/api/invoices/${id}/settle`, { method: 'POST' });
+                if (res.ok) {
+                    this.showToast('Fakturor kvittade och betalmarkerade', 'success');
+                    this.fetchInvoices();
+                    this.selectedInvoice = null;
+                } else {
+                    this.showToast('Kunde inte kvitta: ' + await res.text(), 'error');
+                }
+            } catch (e) {
+                this.showToast('Nätverksfel', 'error');
+            }
+        },
+        
+        async downloadInvoicePDF(id) {
+            try {
+                const res = await this.authFetch(`/api/invoices/${id}/pdf`);
+                if (!res.ok) throw new Error(await res.text());
+                
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Faktura_${this.selectedInvoice.invoice_number || 'Utkast'}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (e) {
+                this.showToast('Kunde inte ladda ner PDF', 'error');
+            }
+        },
+        
+        async deleteInvoice() {
+            if (!this.selectedInvoice) return;
+            const id = this.selectedInvoice.id;
+            if (!id || id === 0) {
+                // If it's unsaved, just close it
+                this.selectedInvoice = null;
+                return;
+            }
+            if (!await this.confirmAction("Vill du radera detta fakturautkast?", "Radera Utkast", "Radera", true)) return;
+            try {
+                const res = await this.authFetch(`/api/invoices/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    this.showToast('Utkast raderat', 'success');
+                    this.fetchInvoices();
+                    this.selectedInvoice = null;
+                } else {
+                    this.showToast('Kunde inte radera', 'error');
+                }
+            } catch (e) {
+                this.showToast('Nätverksfel', 'error');
+            }
+        },
+
         templates: [
             {
                 id: 'inkop_25',
-                name: 'Inköp utrustning (25% moms)',
-                desc: 'Inköp förbrukningsinventarier',
-                type: 'expense',
-                vatRate: 0.25,
-                accountTotal: '1930', // Kredit
-                accountVat: '2641',   // Debet
-                accountBase: '5410'   // Debet
-            },
             {
                 id: 'forsaljning_25',
                 name: 'Försäljning tjänst (25% moms)',
@@ -944,6 +1208,11 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        skv(ore) {
+            if (!ore) return 0;
+            return Math.round(ore / 100);
+        },
+
         async transferVat() {
             if (!this.vatReport) return;
             if (this.vatReport.net_vat === 0) {
@@ -1513,6 +1782,7 @@ document.addEventListener('alpine:init', () => {
                     break;
                 case 'fakturering':
                     this.showInvoices = true;
+                    this.fetchInvoices();
                     break;
                 case 'huvudbok':
                     // Default view is huvudbok when all others are false

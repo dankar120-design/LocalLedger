@@ -56,6 +56,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/invoices/{id}/post", s.HandlePostInvoice)
 	mux.HandleFunc("POST /api/invoices/{id}/pay", s.HandlePayInvoice)
 	mux.HandleFunc("GET /api/invoices/{id}/pdf", s.HandleGetInvoicePDF)
+	mux.HandleFunc("POST /api/invoices/{id}/credit", s.HandleCreditInvoice)
+	mux.HandleFunc("POST /api/invoices/{id}/settle", s.HandleSettleInvoice)
 
 	mux.HandleFunc("POST /api/import/sie4", s.handleImportSIE4)
 	mux.HandleFunc("POST /api/fiscal-years/{id}/generate-ib", s.handleGenerateIB)
