@@ -5,13 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"net/http"
 	"regexp"
 	"strconv"
-	"html/template"
 
-	"localledger/frontend"
 	"localledger/internal/ledger"
 	"localledger/internal/models"
 	"localledger/internal/ocr"
@@ -40,6 +39,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/accounts", s.handleGetAccounts)
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("POST /api/settings", s.handlePostSettings)
+	mux.HandleFunc("POST /api/settings/shortcut", s.handlePostShortcut)
 	mux.HandleFunc("POST /api/settings/logo", s.handleUploadLogo)
 	mux.HandleFunc("GET /api/settings/logo", s.handleServeLogo)
 	mux.HandleFunc("POST /api/accounts", s.handleAddAccount)
@@ -397,50 +397,6 @@ func (s *Server) handleGetAccounts(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(accounts)
 }
 
-func (s *Server) handleGetReports(w http.ResponseWriter, r *http.Request) {
-	yearIDStr := r.URL.Query().Get("year_id")
-	var yearID *int64
-	if yearIDStr != "" {
-		if id, err := strconv.ParseInt(yearIDStr, 10, 64); err == nil {
-			yearID = &id
-		}
-	}
-
-	report, err := s.ledger.GetFinancialReport(yearID)
-	if err != nil {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(fmt.Sprintf("Kunde inte generera rapport: %v", err)))
-		return
-	}
-
-	funcMap := template.FuncMap{
-		"money": func(v int64) string {
-			return fmt.Sprintf("%.2f", float64(v)/100.0)
-		},
-		"json": func(v interface{}) template.JS {
-			b, err := json.Marshal(v)
-			if err != nil {
-				return template.JS("null")
-			}
-			return template.JS(b)
-		},
-	}
-
-	tmpl, err := template.New("reports.html").Funcs(funcMap).ParseFS(frontend.FS, "views/reports.html")
-	if err != nil {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(fmt.Sprintf("Kunde inte ladda mall: %v", err)))
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, report); err != nil {
-		fmt.Printf("Template execute error: %v\n", err)
-	}
-}
-
 func (s *Server) handleGetFinancialJSON(w http.ResponseWriter, r *http.Request) {
 	yearIDStr := r.URL.Query().Get("year_id")
 	var yearID *int64
@@ -620,8 +576,32 @@ func (s *Server) handlePostSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.isSandbox {
+		if err := SaveGlobalConfig(s.ledger.WorkspacePath(), req.Name); err != nil {
+			log.Printf("Varning: Kunde inte uppdatera global config efter settings-ändring: %v", err)
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(req)
+}
+
+func (s *Server) handlePostShortcut(w http.ResponseWriter, r *http.Request) {
+	if s.isSandbox {
+		writeError(w, fmt.Errorf("genvägar kan inte skapas i Sandbox-läge"))
+		return
+	}
+
+	companyName := s.CompanyName()
+	workspacePath := s.ledger.WorkspacePath()
+
+	if err := createDesktopShortcut(workspacePath, companyName); err != nil {
+		writeError(w, fmt.Errorf("misslyckades att skapa skrivbordsgenväg: %w", err))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"status":"success"}`))
 }
 
 func (s *Server) handleExportSIE4(w http.ResponseWriter, r *http.Request) {

@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"fmt"
 	"localledger/internal/models"
+	"log"
 	"math"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -512,6 +514,9 @@ func (l *Ledger) PostInvoice(invoiceID int64, user string) error {
 	}
 
 	if settings.LogoPath != "" {
+		if strings.HasSuffix(strings.ToLower(settings.LogoPath), ".svg") {
+			log.Println("Warning: gofpdf does not support SVG logo format. The layered-diamond vector fallback logo will be used in the PDF.")
+		}
 		settings.LogoPath = filepath.Join(l.WorkspacePath(), settings.LogoPath)
 	}
 

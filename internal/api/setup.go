@@ -22,7 +22,8 @@ import (
 
 // SetupRequest mappar mot JSON payload från klienten
 type SetupRequest struct {
-	Action string `json:"action"` // "new_workspace" eller "sandbox"
+	Action string `json:"action"` // "new_workspace", "sandbox" eller "open_workspace"
+	Path   string `json:"path"`   // Används vid "open_workspace"
 }
 
 // StartSetupServer startar on-boarding UI:t.
@@ -57,6 +58,43 @@ func StartSetupServer(port int) (string, error) {
 		lastPing = time.Now()
 		pingMu.Unlock()
 		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/api/recent-workspaces", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		config, _, isPortable := LoadGlobalConfig()
+		w.Header().Set("Content-Type", "application/json")
+		
+		response := struct {
+			RecentWorkspaces []RecentWorkspace `json:"recent_workspaces"`
+			IsPortable       bool              `json:"is_portable"`
+		}{
+			RecentWorkspaces: config.RecentWorkspaces,
+			IsPortable:       isPortable,
+		}
+		json.NewEncoder(w).Encode(response)
+	})
+
+	mux.HandleFunc("/api/remove-recent", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Path string `json:"path"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error": "Ogiltig request"}`, http.StatusBadRequest)
+			return
+		}
+		if err := RemoveGlobalConfig(req.Path); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "Kunde inte ta bort: %v"}`, err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status": "removed"}`))
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -111,12 +149,34 @@ func StartSetupServer(port int) (string, error) {
 					return
 				}
 
-				if isRootDirectory(selectedWorkspace) {
+				if isForbiddenDirectory(selectedWorkspace) {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusBadRequest)
-					w.Write([]byte(`{"error": "Du kan inte välja en hel rot-enhet (t.ex. C:\\) direkt. Skapa eller välj en specifik undermapp (t.ex. C:\\LocalLedger_Data) för att hålla dina filer rena."}`))
+					w.Write([]byte(`{"error": "Ogiltig eller skyddad systemmapp (t.ex. C:\\Windows eller rot-enhet). Skapa eller välj en specifik undermapp (t.ex. C:\\LocalLedger_Data)."}`))
 					return
 				}
+			} else if req.Action == "open_workspace" {
+				if req.Path == "" {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadRequest)
+					w.Write([]byte(`{"error": "Ingen sök väg angiven"}`))
+					return
+				}
+				cleanedPath := filepath.Clean(req.Path)
+				if isForbiddenDirectory(cleanedPath) {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadRequest)
+					w.Write([]byte(`{"error": "Ogiltig eller skyddad systemmapp kan inte öppnas som arbetsyta."}`))
+					return
+				}
+				dbPath := filepath.Join(cleanedPath, "ledger.db")
+				if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadRequest)
+					w.Write([]byte(`{"error": "Arbetsytan är ogiltig eller saknar databasfilen ledger.db."}`))
+					return
+				}
+				selectedWorkspace = cleanedPath
 			} else {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
@@ -160,10 +220,10 @@ func StartSetupServer(port int) (string, error) {
 				return
 			}
 
-			if isRootDirectory(folderPath) {
+			if isForbiddenDirectory(folderPath) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(`{"error": "Du kan inte välja en hel rot-enhet (t.ex. C:\\) direkt. Skapa eller välj en specifik undermapp (t.ex. C:\\LocalLedger_Data) för att hålla dina filer rena."}`))
+				w.Write([]byte(`{"error": "Ogiltig eller skyddad systemmapp (t.ex. C:\\Windows eller rot-enhet). Skapa eller välj en specifik undermapp (t.ex. C:\\LocalLedger_Data)."}`))
 				return
 			}
 
@@ -197,10 +257,10 @@ func StartSetupServer(port int) (string, error) {
 				return
 			}
 
-			if isRootDirectory(targetWorkspace) {
+			if isForbiddenDirectory(targetWorkspace) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(`{"error": "Du kan inte välja en hel rot-enhet (t.ex. C:\\) direkt. Skapa eller välj en specifik undermapp (t.ex. C:\\LocalLedger_Data) för att hålla dina filer rena."}`))
+				w.Write([]byte(`{"error": "Ogiltig eller skyddad systemmapp (t.ex. C:\\Windows eller rot-enhet). Skapa eller välj en specifik undermapp (t.ex. C:\\LocalLedger_Data)."}`))
 				return
 			}
 
@@ -458,7 +518,7 @@ func StartSetupServer(port int) (string, error) {
 			select {
 			case <-ticker.C:
 				pingMu.Lock()
-				if time.Since(lastPing) > 10*time.Second {
+				if time.Since(lastPing) > 90*time.Second {
 					pingMu.Unlock()
 					errChan <- fmt.Errorf("Setup-fönstret stängdes (timeout)")
 					return
@@ -484,47 +544,109 @@ func StartSetupServer(port int) (string, error) {
 		defer cancel()
 		srv.Shutdown(ctx)
 		
-		// Skapa skrivbordsgenväg (.lnk) vid slutförd installation
-		createDesktopShortcut()
-
 		return result, nil
 	}
 }
 
-// createDesktopShortcut skapar en Windows-genväg (.lnk) på användarens skrivbord
-func createDesktopShortcut() {
+// createDesktopShortcut skapar en Windows-genväg (.lnk) på användarens skrivbord med angivna argument
+func createDesktopShortcut(workspacePath string, companyName string) error {
 	exePath, err := exec.LookPath(os.Args[0])
 	if err != nil {
 		exePath, err = os.Executable()
 		if err != nil {
-			return
+			return err
 		}
 	}
 	
 	absExe, err := filepath.Abs(exePath)
 	if err != nil {
-		return
+		return err
 	}
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return
+	shortcutName := "LocalLedger"
+	if companyName != "" {
+		safeName := companyName
+		for _, char := range []string{"\\", "/", ":", "*", "?", "\"", "<", ">", "|"} {
+			safeName = strings.ReplaceAll(safeName, char, "")
+		}
+		safeName = strings.TrimSpace(safeName)
+		if safeName != "" {
+			shortcutName = fmt.Sprintf("LocalLedger - %s", safeName)
+		}
 	}
 
-	desktopPath := filepath.Join(homeDir, "Desktop", "LocalLedger.lnk")
 	workingDir := filepath.Dir(absExe)
 
 	psScript := fmt.Sprintf(`
+		$TargetWorkspace = %q
+		$ShortcutName = %q
+		$DesktopDir = [System.Environment]::GetFolderPath('Desktop')
+		$DesktopPath = [System.IO.Path]::Combine($DesktopDir, ($ShortcutName + ".lnk"))
+
 		$WshShell = New-Object -ComObject WScript.Shell
-		$Shortcut = $WshShell.CreateShortcut(%q)
+		$DesktopFiles = Get-ChildItem ([System.IO.Path]::Combine($DesktopDir, 'LocalLedger*.lnk')) -ErrorAction SilentlyContinue
+		foreach ($file in $DesktopFiles) {
+			try {
+				$lnk = $WshShell.CreateShortcut($file.FullName)
+				$cleanArgs = $lnk.Arguments -replace 'serve --workspace "', '' -replace '"', ''
+				if ($cleanArgs -eq $TargetWorkspace) {
+					Remove-Item $file.FullName -Force
+				}
+			} catch {}
+		}
+
+		$Shortcut = $WshShell.CreateShortcut($DesktopPath)
 		$Shortcut.TargetPath = %q
+		$Shortcut.Arguments = %q
 		$Shortcut.WorkingDirectory = %q
-		$Shortcut.Description = "LocalLedger Bokföring"
+		$Shortcut.Description = %q
 		$Shortcut.Save()
-	`, desktopPath, absExe, workingDir)
+	`, workspacePath, shortcutName, absExe, fmt.Sprintf("serve --workspace %q", workspacePath), workingDir, fmt.Sprintf("LocalLedger Bokföring för %s", companyName))
 
 	cmd := exec.Command("powershell", "-NoProfile", "-Command", psScript)
-	cmd.Run()
+	return cmd.Run()
+}
+
+// isForbiddenDirectory kontrollerar om en sökväg är en skyddad systemkatalog eller rot-enhet
+func isForbiddenDirectory(path string) bool {
+	if path == "" {
+		return true
+	}
+	cleaned := filepath.Clean(path)
+	
+	// Rot-enhet check
+	if isRootDirectory(cleaned) {
+		return true
+	}
+
+	absPath, err := filepath.Abs(cleaned)
+	if err != nil {
+		return true
+	}
+
+	systemDirs := []string{
+		os.Getenv("WINDIR"),
+		os.Getenv("SYSTEMROOT"),
+		os.Getenv("PROGRAMFILES"),
+		os.Getenv("PROGRAMFILES(X86)"),
+	}
+
+	for _, sysDir := range systemDirs {
+		if sysDir == "" {
+			continue
+		}
+		absSysDir, err := filepath.Abs(sysDir)
+		if err != nil {
+			continue
+		}
+		
+		// Om sökvägen är exakt samma eller ligger inuti en systemkatalog, blockera
+		if strings.HasPrefix(strings.ToLower(absPath), strings.ToLower(absSysDir)) {
+			return true
+		}
+	}
+	
+	return false
 }
 
 // isRootDirectory kontrollerar om en sökväg är en rå volym/rot-enhet på Windows

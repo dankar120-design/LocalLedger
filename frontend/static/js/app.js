@@ -299,6 +299,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async init() {
+            this._toastTimeout = null;
             // Sentinel Principle: Bind early errors and set up persistence
             const stored = (() => { try { return JSON.parse(sessionStorage.getItem('bugLog')) || []; } catch { return []; } })();
             const early = (window.__earlyErrors || []).map(err => typeof err === 'object' ? `[${new Date(err.ts).toLocaleTimeString()}] EARLY ERROR: ${err.msg} at ${err.src}:${err.line}` : err);
@@ -1024,6 +1025,23 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        async createDesktopShortcut() {
+            try {
+                const res = await this.authFetch('/api/settings/shortcut', {
+                    method: 'POST'
+                });
+                if (res.ok) {
+                    this.showToast('Skrivbordsgenväg skapad!', 'success');
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    this.showToast(data.error || 'Kunde inte skapa genväg', 'error');
+                }
+            } catch (e) {
+                console.error(e);
+                this.showToast('Nätverksfel vid skapande av genväg', 'error');
+            }
+        },
+
         async uploadLogo(event) {
             let file;
             if (event.dataTransfer && event.dataTransfer.files) {
@@ -1509,8 +1527,9 @@ document.addEventListener('alpine:init', () => {
                 
                 this.processDroppedFile(file);
                 
-                // Scrolla upp till formuläret
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                // Scrolla upp till formuläret i huvudvyn
+                const mc = document.querySelector('.main-content');
+                if (mc) mc.scrollTo({ top: 0, behavior: 'smooth' });
             } catch(err) {
                 this.showToast(err.message, 'error');
             }
@@ -1988,7 +2007,8 @@ document.addEventListener('alpine:init', () => {
                     
                     // UX: Scrolla ner så att användaren direkt ser den nya posten i listan
                     setTimeout(() => {
-                        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                        const mc = document.querySelector('.main-content');
+                        if (mc) mc.scrollTo({ top: mc.scrollHeight, behavior: 'smooth' });
                     }, 100);
                 } else {
                     const err = await res.json();
@@ -2000,8 +2020,24 @@ document.addEventListener('alpine:init', () => {
         },
 
         showToast(msg, type) {
+            if (this._toastTimeout) {
+                clearTimeout(this._toastTimeout);
+                this._toastTimeout = null;
+            }
             this.toast = { msg, type };
-            setTimeout(() => { this.toast = null; }, 3000);
+            const duration = (type === 'error' || type === 'warning') ? 10000 : 3000;
+            this._toastTimeout = setTimeout(() => {
+                this.toast = null;
+                this._toastTimeout = null;
+            }, duration);
+        },
+
+        dismissToast() {
+            if (this._toastTimeout) {
+                clearTimeout(this._toastTimeout);
+                this._toastTimeout = null;
+            }
+            this.toast = null;
         },
 
         copyBugLog() {

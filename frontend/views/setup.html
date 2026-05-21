@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LocalLedger - Setup</title>
+    <title>LocalLedger - Start</title>
     <style>
         :root {
             --bg-color: #0f1115;
@@ -20,9 +20,9 @@
         body {
             margin: 0;
             padding: 0;
-            height: 100vh;
+            min-height: 100vh;
             display: flex;
-            align-items: center;
+            flex-direction: column;
             justify-content: center;
             background-color: var(--bg-color);
             background-image: 
@@ -30,7 +30,7 @@
                 radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.15), transparent 25%);
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             color: var(--text-main);
-            overflow: hidden;
+            overflow-y: auto;
         }
 
         .container {
@@ -39,14 +39,16 @@
             -webkit-backdrop-filter: blur(20px);
             border: 1px solid var(--glass-border);
             border-radius: 24px;
-            padding: 3rem;
+            padding: 2.5rem;
             width: 100%;
-            max-width: 500px;
+            max-width: 520px;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
             text-align: center;
             transform: translateY(20px);
             opacity: 0;
             animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            margin: auto;
+            box-sizing: border-box;
         }
 
         @keyframes slideUp {
@@ -74,8 +76,8 @@
 
         p {
             color: var(--text-muted);
-            margin: 0 0 2.5rem 0;
-            font-size: 1.1rem;
+            margin: 0 0 2rem 0;
+            font-size: 1.05rem;
             line-height: 1.5;
         }
 
@@ -163,74 +165,220 @@
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
+
+        /* Launcher CSS */
+        .workspace-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .workspace-item:hover:not(.orphaned-item) {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.15);
+            transform: translateY(-1px);
+        }
+        .workspace-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .workspace-name {
+            font-weight: 600;
+            font-size: 1.05rem;
+            margin-bottom: 0.25rem;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .workspace-path {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .workspace-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+        .orphaned-item {
+            opacity: 0.6;
+            cursor: not-allowed;
+            border-style: dashed;
+        }
+        .orphaned-badge {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            padding: 0.2rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-left: 0.75rem;
+            flex-shrink: 0;
+        }
+        .btn-delete-recent {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            width: auto;
+            padding: 0.4rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-delete-recent:hover {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
     </style>
 </head>
 <body>
-    <div class="container" style="max-height: 90vh; overflow-y: auto; padding-right: 8px;">
-        <!-- Generisk Ledger-ikon -->
-        <svg class="logo" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-            <path d="M22 6l-10 7L2 6"></path>
+    <div class="container" style="padding-right: 8px;">
+        <!-- Premium LocalLedger layered diamond icon with custom linear gradient -->
+        <svg class="logo" viewBox="0 0 24 24" style="animation: pulse 4s infinite alternate; width: 64px; height: 64px; margin-bottom: 1.5rem;">
+            <defs>
+                <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#06b6d4" />
+                    <stop offset="100%" stop-color="#3b82f6" />
+                </linearGradient>
+            </defs>
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" fill="none" stroke="url(#logo-grad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
 
-        <h1>Välkommen till LocalLedger</h1>
-        <p style="margin-bottom: 1.5rem;">Välj hur du vill starta din session. Du kan skapa en ny arbetsyta för din bokföring, leka i testmiljön eller återställa en säkerhetskopia.</p>
-
-        <div class="button-group">
-            <button id="btn-new" class="btn-primary" onclick="submitAction('new_workspace', this)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
-                <span class="btn-text">Välj Bokföringsmapp</span>
-                <div class="spinner"></div>
-            </button>
-            
-            <button id="btn-sandbox" class="btn-sandbox" onclick="submitAction('sandbox', this)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
-                <span class="btn-text">Starta i Sandbox</span>
-                <div class="spinner"></div>
-            </button>
-
-            <button id="btn-restore-toggle" class="btn-sandbox" onclick="toggleRestoreForm()" style="border-color: var(--primary); color: var(--primary);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
-                <span class="btn-text">Återställ från Säkerhetskopia</span>
-            </button>
+        <!-- Portabilitets-varning -->
+        <div id="portability-warning" style="display: none; margin-bottom: 1.5rem; text-align: left; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); padding: 1rem; border-radius: 12px; font-size: 0.85rem; line-height: 1.5; animation: fadeIn 0.3s ease;">
+            <div style="display: flex; gap: 0.5rem; color: #fbbf24; font-weight: 600; margin-bottom: 0.25rem; align-items: center;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                Ej portabelt läge
+            </div>
+            <span style="color: var(--text-muted);">
+                LocalLedger har inte skrivrättigheter i mappen där programmet ligger. Inställningar och historik sparas lokalt på denna dator under <code>%LOCALAPPDATA%</code>. Flytta programfilen (.exe) till en skrivbar mapp eller ett USB-minne för att köra 100% portabelt.
+            </span>
         </div>
 
-        <!-- Återställningsformulär -->
-        <div id="restore-form-container" style="display: none; margin-top: 1.5rem; text-align: left; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); padding: 1.5rem; border-radius: 16px; animation: fadeIn 0.3s ease;">
-            <h3 style="margin-top: 0; font-size: 1.1rem; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" style="width: 18px; height: 18px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
-                Återställ Data
-            </h3>
+        <!-- VY 1: LAUNCHER (Visas om det finns sparade workspaces) -->
+        <div id="launcher-view" style="display: none;">
+            <h1>Välj Arbetsyta</h1>
+            <p>Välkommen tillbaka. Välj en av dina nyligen öppnade arbetsytor för att starta bokföringen.</p>
             
-            <div style="margin-bottom: 1rem;">
-                <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 500;">1. Välj var data ska återställas (Målmapp)</label>
-                <div style="display: flex; gap: 0.5rem;">
-                    <input type="text" id="restore-workspace-path" readonly placeholder="Klicka på välj mapp..." style="flex: 1; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.2); color: var(--text-main); font-size: 0.9rem; cursor: default; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                    <button type="button" onclick="selectRestoreFolder()" style="width: auto; padding: 0.75rem 1rem; border-radius: 8px; background: var(--primary); color: white; font-size: 0.9rem; font-weight: 500; white-space: nowrap; display: flex; align-items: center; gap: 0.25rem;">
-                        Välj...
-                    </button>
-                </div>
+            <div id="recent-workspaces-list" style="margin-bottom: 2rem; display: flex; flex-direction: column; gap: 0.75rem; text-align: left; max-height: 320px; overflow-y: auto; padding-right: 4px;">
+                <!-- Fylls i dynamiskt av Javascript -->
+            </div>
+            
+            <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                <button id="btn-show-setup" class="btn-primary" onclick="showView('setup')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
+                    <span class="btn-text">Ny Arbetsyta</span>
+                </button>
+                <button id="btn-show-restore" class="btn-sandbox" onclick="showView('setup'); toggleRestoreForm();">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+                    <span class="btn-text">Återställ Data...</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- VY 2: SETUP / WIZARD (Visas vid nyinstallation eller vid manuellt val) -->
+        <div id="setup-view">
+            <h1 id="setup-title">Välkommen till LocalLedger</h1>
+            <p id="setup-desc" style="margin-bottom: 1.5rem;">Välj hur du vill starta din session. Du kan skapa en ny arbetsyta för din bokföring, leka i testmiljön eller återställa en tidigare säkerhetskopia.</p>
+
+            <div class="button-group">
+                <button id="btn-new" class="btn-primary" onclick="submitAction('new_workspace', this)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
+                    <span class="btn-text">Välj Bokföringsmapp</span>
+                    <div class="spinner"></div>
+                </button>
+                
+                <button id="btn-sandbox" class="btn-sandbox" onclick="submitAction('sandbox', this)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                    <span class="btn-text">Starta i Sandbox</span>
+                    <div class="spinner"></div>
+                </button>
+
+                <button id="btn-restore-toggle" class="btn-sandbox" onclick="toggleRestoreForm()" style="border-color: var(--primary); color: var(--primary);">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+                    <span class="btn-text">Återställ från Säkerhetskopia</span>
+                </button>
             </div>
 
-            <div style="margin-bottom: 1rem;">
-                <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 500;">2. Välj säkerhetskopia (.zip / .llbak)</label>
-                <div style="position: relative;">
-                    <input type="file" id="restore-file-input" accept=".zip,.enc,.llbak" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 2;" onchange="updateFileLabel()">
-                    <div id="file-dropzone" style="border: 2px dashed var(--glass-border); border-radius: 8px; padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.9rem; pointer-events: none; transition: border-color 0.2s ease;">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px; margin: 0 auto 0.5rem auto; display: block;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
-                        <span>Klicka eller dra filen hit</span>
+            <!-- Återställningsformulär -->
+            <div id="restore-form-container" style="display: none; margin-top: 1.5rem; text-align: left; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); padding: 1.5rem; border-radius: 16px; animation: fadeIn 0.3s ease;">
+                <h3 style="margin-top: 0; font-size: 1.1rem; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" style="width: 18px; height: 18px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+                    Återställ Data
+                </h3>
+                
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 500;">1. Välj var data ska återställas (Målmapp)</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="restore-workspace-path" readonly placeholder="Klicka på välj mapp..." style="flex: 1; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.2); color: var(--text-main); font-size: 0.9rem; cursor: default; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        <button type="button" onclick="selectRestoreFolder()" style="width: auto; padding: 0.75rem 1rem; border-radius: 8px; background: var(--primary); color: white; font-size: 0.9rem; font-weight: 500; white-space: nowrap; display: flex; align-items: center; gap: 0.25rem;">
+                            Välj...
+                        </button>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 500;">2. Välj säkerhetskopia (.zip / .llbak)</label>
+                    <div style="position: relative;">
+                        <input type="file" id="restore-file-input" accept=".zip,.enc,.llbak" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 2;" onchange="updateFileLabel()">
+                        <div id="file-dropzone" style="border: 2px dashed var(--glass-border); border-radius: 8px; padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.9rem; pointer-events: none; transition: border-color 0.2s ease;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px; margin: 0 auto 0.5rem auto; display: block;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
+                            <span>Klicka eller dra filen hit</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 1.5rem;">
+                    <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 500;">3. Lösenord (om krypterad)</label>
+                    <input type="password" id="restore-password" placeholder="Lämna tomt om ej lösenordsskyddad" style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.2); color: var(--text-main); font-size: 0.9rem; box-sizing: border-box;">
+                </div>
+
+                <button id="btn-do-restore" class="btn-primary" onclick="submitRestore(this)" style="padding: 0.85rem;">
+                    <span class="btn-text">Utför Återställning</span>
+                    <div class="spinner"></div>
+                </button>
+            </div>
+
+            <!-- Pedagogiskt Informationskort -->
+            <div id="edu-card" style="margin-top: 2rem; text-align: left; background: rgba(59, 130, 246, 0.03); border: 1px solid rgba(59, 130, 246, 0.15); padding: 1.5rem; border-radius: 16px; font-size: 0.9rem; line-height: 1.6; animation: fadeIn 0.4s ease;">
+                <h3 style="margin-top: 0; font-size: 1.05rem; color: #3b82f6; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                    Hur fungerar LocalLedger?
+                </h3>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem; color: var(--text-muted);">
+                    <div>
+                        <strong style="color: var(--text-main); display: block; margin-bottom: 0.15rem;">1. Helt portabel binär (.exe)</strong>
+                        Du kan placera programmet (den exekverbara filen) precis var du vill – på skrivbordet, i C:\ eller direkt på ett USB-minne. Den är helt självförsörjande och sparar ingen data inuti sig själv.
+                    </div>
+                    <div>
+                        <strong style="color: var(--text-main); display: block; margin-bottom: 0.15rem;">2. Mapp-baserade Arbetsytor</strong>
+                        All din bokföring, dina fakturor, kvitton och inställningar sparas i en separat undermapp (arbetsyta) som du själv väljer. Du kan enkelt ha olika mappar för olika företag!
+                    </div>
+                    <div>
+                        <strong style="color: var(--text-main); display: block; margin-bottom: 0.15rem;">3. Lokalt, Säkert och Privat</strong>
+                        Ingen data skickas någonsin till en extern server – allt sparas helt privat på din egen dator. Om du vill ha en säkerhetskopia i molnet rekommenderar vi att du använder programmets inbyggda funktion för lösenordsskyddade säkerhetskopior under Verktyg och sparar filen i din molntjänst. Undvik att låta din molntjänst automatiskt synkronisera dina aktiva arbetsmappar medan programmet är öppet för att garantera att dina filer inte störs.
                     </div>
                 </div>
             </div>
 
-            <div style="margin-bottom: 1.5rem;">
-                <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 500;">3. Lösenord (om krypterad)</label>
-                <input type="password" id="restore-password" placeholder="Lämna tomt om ej lösenordsskyddad" style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.2); color: var(--text-main); font-size: 0.9rem; box-sizing: border-box;">
-            </div>
-
-            <button id="btn-do-restore" class="btn-primary" onclick="submitRestore(this)" style="padding: 0.85rem;">
-                <span class="btn-text">Utför Återställning</span>
-                <div class="spinner"></div>
+            <!-- Launcher Tillbaka-knapp om det finns historik -->
+            <button id="btn-back-to-launcher" class="btn-sandbox" onclick="showView('launcher')" style="margin-top: 1.5rem; display: none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                <span class="btn-text">Tillbaka till startmenyn</span>
             </button>
         </div>
 
@@ -239,10 +387,193 @@
 
     <script>
         // Heartbeat för att hålla Go-servern vid liv. Om detta fönster stängs
-        // dör servern automatiskt efter 10 sekunder.
+        // dör servern automatiskt efter 90 sekunder.
         const heartbeat = setInterval(() => {
             fetch('/ping').catch(() => {});
         }, 2000);
+
+        let recentWorkspaces = [];
+
+        // Hämta senast använda workspaces vid start
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch('/api/recent-workspaces');
+                if (response.ok) {
+                    const data = await response.json();
+                    recentWorkspaces = data.recent_workspaces || [];
+                    
+                    // Visa/dölj portabilitets-varning baserat på is_portable flaggan
+                    if (data.is_portable === false) {
+                        document.getElementById('portability-warning').style.display = 'block';
+                    } else {
+                        document.getElementById('portability-warning').style.display = 'none';
+                    }
+
+                    if (recentWorkspaces.length > 0) {
+                        renderRecentWorkspaces();
+                        document.getElementById('btn-back-to-launcher').style.display = 'flex';
+                        
+                        // Ändra setup-titel och beskrivning för bättre integration
+                        document.getElementById('setup-title').innerText = 'Skapa eller Återställ';
+                        document.getElementById('setup-desc').innerText = 'Välj en ny mapp för att starta ett till företag, eller återställ från en tidigare säkerhetskopia.';
+                        
+                        showView('launcher');
+                    } else {
+                        showView('setup');
+                    }
+                } else {
+                    showView('setup');
+                }
+            } catch (e) {
+                showView('setup');
+            }
+        });
+
+        function showSetupError(message, isSuccess = false) {
+            const errEl = document.getElementById('error-container');
+            if (!message) {
+                errEl.innerText = '';
+                return;
+            }
+            errEl.style.color = isSuccess ? '#10b981' : '#ef4444';
+            errEl.innerText = message;
+            // Glid felmeddelandet mjukt i fokus om det är utanför skärmen
+            errEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function showView(view) {
+            const setupView = document.getElementById('setup-view');
+            const launcherView = document.getElementById('launcher-view');
+            
+            if (view === 'launcher') {
+                setupView.style.display = 'none';
+                launcherView.style.display = 'block';
+            } else {
+                setupView.style.display = 'block';
+                launcherView.style.display = 'none';
+            }
+            showSetupError('');
+        }
+
+        function renderRecentWorkspaces() {
+            const listContainer = document.getElementById('recent-workspaces-list');
+            listContainer.innerHTML = '';
+            
+            recentWorkspaces.forEach(ws => {
+                const item = document.createElement('div');
+                item.className = 'workspace-item' + (ws.orphaned ? ' orphaned-item' : '');
+                
+                // Formatera tid
+                let dateStr = '';
+                try {
+                    const d = new Date(ws.last_used);
+                    dateStr = d.toLocaleDateString('sv-SE') + ' ' + d.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+                } catch(e) {}
+                
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'workspace-info';
+                
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'workspace-name';
+                nameDiv.innerText = ws.company_name || 'Namnlöst företag';
+                if (ws.orphaned) {
+                    const badge = document.createElement('span');
+                    badge.className = 'orphaned-badge';
+                    badge.innerText = 'Flyttad / Hittas ej';
+                    nameDiv.appendChild(badge);
+                }
+                
+                const pathDiv = document.createElement('div');
+                pathDiv.className = 'workspace-path';
+                pathDiv.innerText = ws.path;
+                
+                const metaDiv = document.createElement('div');
+                metaDiv.className = 'workspace-meta';
+                metaDiv.innerText = `Senast använd: ${dateStr}`;
+                
+                infoDiv.appendChild(nameDiv);
+                infoDiv.appendChild(pathDiv);
+                infoDiv.appendChild(metaDiv);
+                
+                item.appendChild(infoDiv);
+                
+                if (!ws.orphaned) {
+                    item.onclick = () => openRecentWorkspace(ws.path);
+                }
+                
+                // Radera-knapp
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'btn-delete-recent';
+                deleteBtn.title = 'Ta bort från listan';
+                deleteBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`;
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation(); // Stoppa klicket från att starta workspacet
+                    removeRecentWorkspace(ws.path);
+                };
+                
+                item.appendChild(deleteBtn);
+                listContainer.appendChild(item);
+            });
+        }
+
+        async function openRecentWorkspace(path) {
+            const container = document.querySelector('.container');
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(b => b.disabled = true);
+            container.classList.add('loading');
+            showSetupError('');
+            
+            try {
+                const response = await fetch('/setup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'open_workspace', path: path })
+                });
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Kunde inte öppna arbetsytan.');
+                }
+                
+                const data = await response.json();
+                if (data.redirect) {
+                    showSetupError('Startar applikationen...', true);
+                    pollForHandover(data.redirect);
+                }
+            } catch (error) {
+                showSetupError(error.message);
+                buttons.forEach(b => b.disabled = false);
+                container.classList.remove('loading');
+            }
+        }
+
+        async function removeRecentWorkspace(path) {
+            if (!confirm('Vill du ta bort den här arbetsytan från listan? (Detta raderar inga filer, bara genvägen i den här startmenyn)')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/remove-recent', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+                
+                if (response.ok) {
+                    recentWorkspaces = recentWorkspaces.filter(ws => ws.path !== path);
+                    if (recentWorkspaces.length > 0) {
+                        renderRecentWorkspaces();
+                    } else {
+                        showView('setup');
+                        document.getElementById('btn-back-to-launcher').style.display = 'none';
+                        document.getElementById('setup-title').innerText = 'Välkommen till LocalLedger';
+                        document.getElementById('setup-desc').innerText = 'Välj hur du vill starta din session. Du kan skapa en ny arbetsyta för din bokföring, leka i testmiljön eller återställa en tidigare säkerhetskopia.';
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
 
         function toggleRestoreForm() {
             const form = document.getElementById('restore-form-container');
@@ -261,7 +592,7 @@
         }
 
         async function selectRestoreFolder() {
-            document.getElementById('error-container').innerText = '';
+            showSetupError('');
             try {
                 const response = await fetch('/select-folder', { method: 'POST' });
                 if (!response.ok) {
@@ -273,8 +604,7 @@
                     document.getElementById('restore-workspace-path').value = data.folder;
                 }
             } catch (error) {
-                document.getElementById('error-container').style.color = '#ef4444';
-                document.getElementById('error-container').innerText = error.message;
+                showSetupError(error.message);
             }
         }
 
@@ -297,17 +627,15 @@
             const fileInput = document.getElementById('restore-file-input');
             const password = document.getElementById('restore-password').value;
             
-            document.getElementById('error-container').innerText = '';
+            showSetupError('');
 
             if (!workspacePath) {
-                document.getElementById('error-container').style.color = '#ef4444';
-                document.getElementById('error-container').innerText = 'Vänligen välj en målmapp först.';
+                showSetupError('Vänligen välj en målmapp först.');
                 return;
             }
 
             if (!fileInput.files || fileInput.files.length === 0) {
-                document.getElementById('error-container').style.color = '#ef4444';
-                document.getElementById('error-container').innerText = 'Vänligen välj en säkerhetskopia att ladda upp.';
+                showSetupError('Vänligen välj en säkerhetskopia att ladda upp.');
                 return;
             }
 
@@ -339,13 +667,11 @@
 
                 const data = await response.json();
                 if (data.redirect) {
-                    document.getElementById('error-container').style.color = '#10b981';
-                    document.getElementById('error-container').innerText = 'Återställning lyckades! Startar applikationen...';
+                    showSetupError('Återställning lyckades! Startar applikationen...', true);
                     pollForHandover(data.redirect);
                 }
             } catch (error) {
-                document.getElementById('error-container').style.color = '#ef4444';
-                document.getElementById('error-container').innerText = error.message;
+                showSetupError(error.message);
                 buttons.forEach(b => b.disabled = false);
                 btnElement.classList.remove('loading');
             }
@@ -356,7 +682,7 @@
             buttons.forEach(b => b.disabled = true);
             
             btnElement.classList.add('loading');
-            document.getElementById('error-container').innerText = '';
+            showSetupError('');
 
             try {
                 const response = await fetch('/setup', {
@@ -372,13 +698,11 @@
 
                 const data = await response.json();
                 if (data.redirect) {
-                    document.getElementById('error-container').style.color = '#10b981';
-                    document.getElementById('error-container').innerText = 'Startar applikationen...';
+                    showSetupError('Startar applikationen...', true);
                     pollForHandover(data.redirect);
                 }
             } catch (error) {
-                document.getElementById('error-container').style.color = '#ef4444';
-                document.getElementById('error-container').innerText = error.message;
+                showSetupError(error.message);
                 buttons.forEach(b => b.disabled = false);
                 btnElement.classList.remove('loading');
             }
@@ -396,8 +720,7 @@
                 } catch (e) {
                     if (attempts > 30) {
                         clearInterval(interval);
-                        document.getElementById('error-container').style.color = '#ef4444';
-                        document.getElementById('error-container').innerText = 'Timeout vid start. Ladda om sidan manuellt.';
+                        showSetupError('Timeout vid start. Ladda om sidan manuellt.');
                     }
                 }
             }, 500);

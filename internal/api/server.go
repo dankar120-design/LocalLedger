@@ -20,7 +20,7 @@ import (
 	"localledger/internal/ledger"
 )
 
-const CurrentAppVersion = "0.9.0"
+const CurrentAppVersion = "1.4.0"
 
 type Server struct {
 	httpServer   *http.Server
@@ -119,8 +119,8 @@ func Start(workspace string, port int, isE2E bool, isSandbox bool) (*Server, err
 	// 4. Konfigurera HTTP-servern
 	s.httpServer = &http.Server{
 		Handler:      handler,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
 	}
 
 	// 6. Starta servern i bakgrunden
@@ -183,6 +183,24 @@ func (s *Server) ShutdownChan() <-chan struct{} {
 func (s *Server) Token() string {
 	return s.token
 }
+
+// CompanyName returnerar företagsnamnet inställt i databasen.
+func (s *Server) CompanyName() string {
+	if s.ledger == nil {
+		return ""
+	}
+	settings, err := s.ledger.GetSettings()
+	if err != nil {
+		return ""
+	}
+	return settings.Name
+}
+
+// IsSandbox returnerar om servern körs i sandbox-läge.
+func (s *Server) IsSandbox() bool {
+	return s.isSandbox
+}
+
 
 // authMiddleware kräver 'Authorization: Bearer <token>' för alla /api/-anrop.
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
@@ -249,25 +267,6 @@ func (s *Server) handleFrontendIndex(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleGetTools(w http.ResponseWriter, r *http.Request) {
-	data := struct {
-		Token string
-	}{
-		Token: s.token,
-	}
-
-	tmpl, err := template.ParseFS(frontend.FS, "views/tools.html")
-	if err != nil {
-		http.Error(w, "Kunde inte ladda tools-mallen", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
-		http.Error(w, "Failed to render template", http.StatusInternalServerError)
-	}
-}
-
 // handleHealth returnerar en enkel status-JSON.
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -276,7 +275,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	
 	status := map[string]interface{}{
 		"status":  "ok",
-		"version": "v1.4.0",
+		"version": CurrentAppVersion,
 	}
 
 	if err == nil && fy != nil {

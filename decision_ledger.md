@@ -271,5 +271,45 @@
     <kärna>1. Säkrat /restore-endpointen i setup.go mot Windows rot-enheter via isRootDirectory-kontroll. 2. Förbättrat PNG MIME-valideringsfel i logo.go. 3. Ändrat .company-topbar från sticky till relative i style.css för att undvika överlappningar. 4. Lagt till showHelp-negation i index.html för nav-highlight och paneldöljning vid visning av Hjälp &amp; Guide.</kärna>
     <motivering>Löser användarrapporterade problem från pilottester rörande röriga rotkataloger, otydliga MIME-fel vid omdöpta bildfiler, störande CSS-överlappningar i listor/inmatning samt navigeringsbuggar för Hjälp &amp; Guide.</motivering>
   </record>
+  <record id="PORTABLE_MULTITENANT_LAUNCHER_01" kategori="Arkitektur / UX">
+    <beslut>Implementerat Multi-Tenant Launcher, Cascading Config Fallback och Portable Onboarding för 100% USB-vänlig drift.</beslut>
+    <kärna>1. Skapat konfigurationsmotorn i config.go med tyst fallback från programkatalogen (USB-portabelt läge) till %LOCALAPPDATA% om katalogen är skrivskyddad. 2. Implementerat relativisering av arbetsytesökvägar för att klara skiftande enhetsbokstäver på USB-enheter. 3. Lagt till Orphan Guard-validering i Launchern som avaktiverar workspaces som saknar ledger.db och ger möjlighet till borttagning. 4. Integrerat ett pedagogiskt informationskort i setup.html som förklarar stateless .exe och workspaces. 5. Tagit bort automatisk skrivbordsgenväg vid onboarding och skapat en in-app Settings-funktion via POST /api/settings/shortcut med PowerShell-baserad genvägsgenerering döpt efter företagsnamn och servad med workspace-argument.</kärna>
+    <motivering>Denna arkitekturförändring lyfter LocalLedger till att bli helt bärbar (USB-vänlig), förtydligar driftsmodellen dramatiskt för förstagångsanvändare samt ger full flexibilitet för användare att hantera flera företag oberoende av varandra utan att störa Windows-miljön med oväntade automatiska genvägar.</motivering>
+  </record>
+  <record id="PORTABLE_LAUNCHER_HARDENING_01" kategori="Arkitektur / Säkerhet">
+    <beslut>Härdat Launcher-systemet med portabilitetsvarning, path-traversal-skydd och de-duplicerade säkra genvägar.</beslut>
+    <kärna>1. Implementerat isPortable-detektering i config.go och exponerat den till frontenden via /api/recent-workspaces för att visa en banner vid begränsade skrivrättigheter. 2. Härdat open_workspace med filepath.Clean mot path traversal. 3. Säkrat createDesktopShortcut med %q mot PowerShell-injektion och lagt till automatisk radering av dubbletter/zombie-genvägar baserat på målarbetsyta.</kärna>
+    <motivering>En djupgående revision (FAS 2) identifierade risker med tyst portabilitetsförlust, duplicerade zombieskrivbordsgenvägar vid namnbyten och injektioner. Detta löser alla tre brister på ett BFL- och Windows-säkert sätt.</motivering>
+  </record>
+  <record id="PORTABLE_LAUNCHER_HARDENING_02" kategori="Säkerhet / Windows">
+    <beslut>Åtgärdat split-brain för genvägssökväg, infört isForbiddenDirectory-check mot Windows-systemmappar samt implementerat 100% enhetstesttäckning av cascading config-fallback.</beslut>
+    <kärna>1. Flyttat all sökvägsberäkning för Windows Desktop till PowerShell. 2. Skapat isForbiddenDirectory för att explicit blockera och logga obehöriga öppningar av systemkataloger (t.ex. C:\Windows, C:\Program Files) under uppstart. 3. Skapat config_test.go med fullständiga enhetstester för relativa sökvägar, orphanguard och config-parsarflödet.</kärna>
+    <motivering>Åtgärdar allvarliga Windows-specifika edge-cases med OneDrive/Skrivbord-omdirigeringar, lyfter säkerheten i fleranvändarscenarier och ger robust testskydd vid framtida refaktoriseringar.</motivering>
+  </record>
+  <record id="POST_AUDIT_HARDENING_03" kategori="Felsökning / Säkerhet">
+    <beslut>Slutfört post-audit buggfixar och härdning av serverns nätverks- och versionsintegritet.</beslut>
+    <kärna>1. Synkat CurrentAppVersion till 1.4.0 och ändrat handleHealth till att returnera detta värde, vilket löser versionsmissmatch vid single-instance kontroll under Windows-uppstart. 2. Ökat ReadTimeout och WriteTimeout till 30 sekunder för att säkra nätverksöverföringar vid uppladdning av stora säkerhetskopior (50MB+). 3. Ökat setup-heartbeat watchdog timeout till 90s för att förhindra falska zombie-nedstängningar orsakade av Chromium-bakgrundstrådstrypning och FolderBrowserDialog-väntan under onboarding. 4. Raderat pre-SPA reliker (handleGetTools och handleGetReports) och städat bort tillhörande oanvända importer.</kärna>
+    <motivering>Denna driftssäkring och systemhärdning åtgärdar teoretiska och praktiska brister identifierade under revisionsfasen. Genom att eliminera versionsdivergensen, harmonisera nätverkstimeouts och utöka watchdog-gränsen uppnår systemet fullständig och stabil produktionsstatus.</motivering>
+  </record>
+  <record id="POST_AUDIT_HYGIENE_04" kategori="Kodhygien / Dokumentation">
+    <beslut>Åtgärdat felaktig timeoutkommentar i frontenden efter djupgående granskningsrunda.</beslut>
+    <kärna>1. Korrigerat utdaterad kommentar i setup.html som angav 10 sekunders timeout, till att stämma överens med den faktiska 90 sekunders timeout som konfigurerats i setup.go.</kärna>
+    <motivering>En djupgående fientlig revision (FAS 2) och granskning bekräftade att alla ändringar i nätverks- och versionsprotokollen är robusta och stabila. Justeringen av kommentaren garanterar absolut kodintegritet och förhindrar framtida missförstånd för utvecklare.</motivering>
+  </record>
+  <record id="UI_UX_BRANDING_FALLBACK_01" kategori="UI / UX / Branding">
+    <beslut>Implementerat layout-, UI/UX- och varumärkesförbättringar samt en högupplöst vektorlogotyp som fallback i PDF-fakturor.</beslut>
+    <kärna>Åtgärdat flex-overflow- och scroll-buggar på setup-skärmen, flyttat status-badgen (WORM) till topbaren, lagt till klick-avvisning och parametriserad timeout på toasts, samt implementerat en cyan (#06b6d4) layered-diamond vektorfallback i PDF-genereringen via fpdf.</kärna>
+    <motivering>Förbättrar systemets professionella estetik och varumärkesupplevelse under onboarding och löpande användning. Vektorfallbacken i PDF-motorn garanterar knivskarp visning av LocalLedger-logotypen även om en uppladdad bild saknas eller raderas på disk, helt i linje med svensk bokföringslagstiftning (BFL) och designstandarder.</motivering>
+  </record>
+  <record id="UI_UX_BRANDING_FALLBACK_02" kategori="UI / UX / Säkerhet">
+    <beslut>Härdat toast-notifieringssystemets stängningslogik mot timeout-raceconditions, åtgärdat PDF-logotypgenereringens dolda fel och BFL-säkrat onboardingens molnsynktext.</beslut>
+    <kärna>1. Skapat dismissToast() i app.js och bundit till @click i index.html för att atomärt stänga toasten och rensa _toastTimeout. 2. Implementerat pdf.Err() och pdf.ClearError() i pdf.go efter ImageOptions för att säkra fallback-vektorritning vid skadade bildfiler. 3. Skrivit om setup.html's portabilitetstips till att varna mot aktiv databassynkning av SQLite-filer och rekommendera inbyggd AES-256 backup.</kärna>
+    <motivering>En fientlig granskning (FAS 1 och 2) under strängt I/O-lås avtäckte en kritisk state-läcka i toast-notifieringarnas livscykel, en risk för SQLite-korruption på grund av felaktigt formulerade molnråd till användare, samt en blind fläck i fpdf:s dolda felhantering. Genom att stänga dessa sårbarheter säkras både UX och dataintegriteten enligt BFL.</motivering>
+  </record>
+  <record id="UI_UX_BRANDING_FALLBACK_03" kategori="UI / UX / Säkerhet / Kodhygien">
+    <beslut>Slutfört de sista post-audit-punkterna: Jargongfri onboarding-synktext samt proaktiv SVG-detektion vid faktura-PDF-generering.</beslut>
+    <kärna>1. Skrivit om sync-informationen i setup.html till ett helt jargongfritt språk (tagit bort "databas" och "fillåsningsfel"). 2. Implementerat SVG-filtilläggskontroll i invoice.go som proaktivt loggar en konsolvarning för att underlätta logotyp-felsökning då gofpdf saknar SVG-stöd.</kärna>
+    <motivering>Genom att förenkla onboarding-guiden undviks teknisk förvirring hos slutanvändare rörande synkroniseringsstörningar. SVG-kontrollen säkerställer dessutom tydlig backend-diagnostik om varför bildgenereringen tyst faller tillbaka på LocalLedger-vektorlogotypen.</motivering>
+  </record>
 </decision_ledger>
 

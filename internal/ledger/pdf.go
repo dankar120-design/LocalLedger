@@ -19,12 +19,45 @@ func GenerateInvoicePDF(inv models.Invoice, settings models.CompanySettings, inv
 	tr := pdf.UnicodeTranslatorFromDescriptor("")
 
 	// --- Header ---
-	// Logo if exists (Safe handling: if it fails, we just don't display it, we don't crash)
+	// Logo if exists (Safe handling: if it fails, we draw the fallback logo)
+	logoDrawn := false
 	if settings.LogoPath != "" {
 		if _, err := os.Stat(settings.LogoPath); err == nil {
 			// We only warn, not crash if ImageOptions fails internally
 			pdf.ImageOptions(settings.LogoPath, 10, 10, 40, 0, false, fpdf.ImageOptions{ReadDpi: true}, 0, "")
+			if pdf.Err() {
+				pdf.ClearError()
+			} else {
+				logoDrawn = true
+			}
 		}
+	}
+
+	if !logoDrawn {
+		// Draw 3 layered vector diamonds as LocalLedger logo fallback in clean cyan (#06b6d4)
+		pdf.SetDrawColor(6, 182, 212)
+		pdf.SetLineWidth(0.8)
+
+		// Top Diamond
+		points := []fpdf.PointType{
+			{X: 25, Y: 9},
+			{X: 35, Y: 14},
+			{X: 25, Y: 19},
+			{X: 15, Y: 14},
+		}
+		pdf.Polygon(points, "D")
+
+		// Middle V
+		pdf.Line(15, 19, 25, 24)
+		pdf.Line(25, 24, 35, 19)
+
+		// Bottom V
+		pdf.Line(15, 24, 25, 29)
+		pdf.Line(25, 29, 35, 24)
+
+		// Reset draw properties to default
+		pdf.SetDrawColor(0, 0, 0)
+		pdf.SetLineWidth(0.2)
 	}
 
 	// Company Name Top Right
