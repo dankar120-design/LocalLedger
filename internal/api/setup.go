@@ -283,7 +283,6 @@ func StartSetupServer(port int) (string, error) {
 
 			// Skapa underkataloger i staging
 			os.MkdirAll(filepath.Join(stagingDir, "attachments"), 0755)
-			os.MkdirAll(filepath.Join(stagingDir, "invoices"), 0755)
 
 			// Packa upp säkert (Anti-Zip Slip)
 			zipReader, err := zip.OpenReader(finalZipPath)
@@ -362,31 +361,42 @@ func StartSetupServer(port int) (string, error) {
 			walPath := filepath.Join(targetWorkspace, "ledger.db-wal")
 			shmPath := filepath.Join(targetWorkspace, "ledger.db-shm")
 			attachPath := filepath.Join(targetWorkspace, "attachments")
-			invoicePath := filepath.Join(targetWorkspace, "invoices")
 
-			// Rensa eventuella gamla filer i målkatalogen
+			// Rensa eventuella gamla filer i målkatalogen med retry-loopar för Windows
 			os.Remove(walPath)
 			os.Remove(shmPath)
-			os.Remove(dbPath)
+			
+			var removeErr error
+			for i := 0; i < 5; i++ {
+				removeErr = os.Remove(dbPath)
+				if removeErr == nil || os.IsNotExist(removeErr) {
+					break
+				}
+				log.Printf("[Setup Restore] Database remove locked, retrying in 200ms... (%d/5)", i+1)
+				time.Sleep(200 * time.Millisecond)
+			}
 			os.RemoveAll(attachPath)
-			os.RemoveAll(invoicePath)
 
-			// Flytta nya filer på plats
-			if err := os.Rename(filepath.Join(stagingDir, "ledger.db"), dbPath); err != nil {
+			// Flytta nya filer på plats med retry-loop
+			var renameErr error
+			for i := 0; i < 5; i++ {
+				renameErr = os.Rename(filepath.Join(stagingDir, "ledger.db"), dbPath)
+				if renameErr == nil {
+					break
+				}
+				log.Printf("[Setup Restore] Database rename locked, retrying in 200ms... (%d/5)", i+1)
+				time.Sleep(200 * time.Millisecond)
+			}
+			if renameErr != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(fmt.Sprintf(`{"error": "Kunde inte flytta databasfilen på plats: %v"}`, err)))
+				w.Write([]byte(fmt.Sprintf(`{"error": "Kunde inte flytta databasfilen på plats: %v"}`, renameErr)))
 				return
 			}
 
 			// Flytta attachments om det finns
 			if _, errStat := os.Stat(filepath.Join(stagingDir, "attachments")); errStat == nil {
 				os.Rename(filepath.Join(stagingDir, "attachments"), attachPath)
-			}
-
-			// Flytta invoices om det finns
-			if _, errStat := os.Stat(filepath.Join(stagingDir, "invoices")); errStat == nil {
-				os.Rename(filepath.Join(stagingDir, "invoices"), invoicePath)
 			}
 
 			// Flytta eventuella andra filer (som company_logo.* eller annat)

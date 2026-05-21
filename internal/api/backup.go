@@ -414,11 +414,58 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 		os.Remove(walPath)
 		os.Remove(shmPath)
 
-		os.Remove(dbPath)
-		os.Rename(filepath.Join(stagingDir, "ledger.db"), dbPath)
+		// Robust retry-loop för borttagning av gamla ledger.db på Windows (fil-lås)
+		var removeErr error
+		for i := 0; i < 5; i++ {
+			removeErr = os.Remove(dbPath)
+			if removeErr == nil || os.IsNotExist(removeErr) {
+				break
+			}
+			log.Printf("[Hot Restore] Database file is locked. Retrying remove in 200ms... (%d/5): %v", i+1, removeErr)
+			time.Sleep(200 * time.Millisecond)
+		}
+		if removeErr != nil && !os.IsNotExist(removeErr) {
+			log.Printf("[CRITICAL ERROR] Failed to remove locked database file during hot restore: %v", removeErr)
+			os.RemoveAll(stagingDir)
+			return
+		}
 
-		os.RemoveAll(attachPath)
-		os.Rename(filepath.Join(stagingDir, "attachments"), attachPath)
+		// Robust retry-loop för att flytta nya ledger.db på plats
+		var renameErr error
+		for i := 0; i < 5; i++ {
+			renameErr = os.Rename(filepath.Join(stagingDir, "ledger.db"), dbPath)
+			if renameErr == nil {
+				break
+			}
+			log.Printf("[Hot Restore] Database file is locked. Retrying rename in 200ms... (%d/5): %v", i+1, renameErr)
+			time.Sleep(200 * time.Millisecond)
+		}
+		if renameErr != nil {
+			log.Printf("[CRITICAL ERROR] Failed to rename database file during hot restore: %v", renameErr)
+			os.RemoveAll(stagingDir)
+			return
+		}
+
+		// Robust retry-loop för attachments-mappen
+		var attachRemoveErr error
+		for i := 0; i < 5; i++ {
+			attachRemoveErr = os.RemoveAll(attachPath)
+			if attachRemoveErr == nil {
+				break
+			}
+			log.Printf("[Hot Restore] Attachments folder is locked. Retrying remove in 200ms... (%d/5): %v", i+1, attachRemoveErr)
+			time.Sleep(200 * time.Millisecond)
+		}
+
+		var attachRenameErr error
+		for i := 0; i < 5; i++ {
+			attachRenameErr = os.Rename(filepath.Join(stagingDir, "attachments"), attachPath)
+			if attachRenameErr == nil {
+				break
+			}
+			log.Printf("[Hot Restore] Attachments folder is locked. Retrying rename in 200ms... (%d/5): %v", i+1, attachRenameErr)
+			time.Sleep(200 * time.Millisecond)
+		}
 
 		// Flytta eventuella andra filer (som company_logo.*) från staging till workspace
 		if files, errRead := os.ReadDir(stagingDir); errRead == nil {

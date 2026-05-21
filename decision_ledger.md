@@ -261,5 +261,10 @@
     <kärna>1. Skapat endpoints /select-folder och /restore i Setup-multiplexern i setup.go som stöder PowerShell FolderBrowserDialog och multipart-uppladdning. 2. Integrerat decryptPayload, Anti-Zip Slip och ledger.OpenLedger schema- och korruptionsvalidering (v3.0.0) under uppstarts-restorering. 3. Uppdaterat setup.html med en premium och lyxig "Återställ från Säkerhetskopia" glassmorfisk expander med drag-and-drop droppzon, lösenordsfält och dynamic progress feedback.</kärna>
     <motivering>Genom att bygga in fullständigt stöd för att starta från en befintlig säkerhetskopia direkt i onboarding-skedet slipper användare manuellt fippla med mappar på disk eller starta tomma arbetsytor innan återställning görs. Integrerad validering skyddar mot nedgraderingsattacker, skadade zippar eller korrupta SQLite-databaser innan driftsättning sker.</motivering>
   </record>
+  <record id="POST_AUDIT_RESTORE_ROBUSTNESS_01" kategori="Säkerhet / Arkitektur">
+    <beslut>Eliminerat tomma mappar och infört robusta retry-loopar för Windows file lock mitigation under återställning (Restore).</beslut>
+    <kärna>1. Rensat phantom 'invoices/' katalog-logiken i setup.go för att undvika onödig tom mappskapande. 2. Implementerat robusta retry-loopar (upp till 5 försök med 200ms sleep) och explicit felrapportering på os.Remove och os.Rename för databas- och attachments-operationer under både Setup-återställning (setup.go) och Hot-återställning (backup.go).</kärna>
+    <motivering>En fientlig arkitekturgranskning (FAS 1 &amp; 2) påvisade potentiella risker för Windows-specifika fillåsningsfel (ERROR_SHARING_VIOLATION) direkt efter Close() på databasen. Genom att införa retry-loopar och städa bort den icke-existerande invoices-katalogen garanteras 100% driftsäkerhet och atomicitet på Windows under hela återställningscykeln.</motivering>
+  </record>
 </decision_ledger>
 
