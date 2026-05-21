@@ -128,7 +128,7 @@ func GenerateInvoicePDF(inv models.Invoice, settings models.CompanySettings, inv
 
 	rates := []int{25, 12, 6, 0}
 	for _, rate := range rates {
-		if amount := vatBreakdown[rate]; amount > 0 {
+		if amount := vatBreakdown[rate]; amount != 0 {
 			pdf.CellFormat(155, 6, fmt.Sprintf("Moms %d%%:", rate), "", 0, "R", false, 0, "")
 			pdf.CellFormat(35, 6, fmt.Sprintf("%.2f kr", float64(amount)/100.0), "", 1, "R", false, 0, "")
 		}

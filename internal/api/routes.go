@@ -40,6 +40,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/accounts", s.handleGetAccounts)
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("POST /api/settings", s.handlePostSettings)
+	mux.HandleFunc("POST /api/settings/logo", s.handleUploadLogo)
+	mux.HandleFunc("GET /api/settings/logo", s.handleServeLogo)
 	mux.HandleFunc("POST /api/accounts", s.handleAddAccount)
 	mux.HandleFunc("GET /api/export/sie4", s.handleExportSIE4)
 	mux.HandleFunc("GET /api/export/backup", s.handleExportBackup)
@@ -68,6 +70,9 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/inbox/{id}/download", s.handleDownloadInbox)
 	mux.HandleFunc("POST /api/inbox/upload", s.handleUploadInbox)
 	mux.HandleFunc("DELETE /api/inbox/{id}", s.handleDeleteInbox)
+	// Customers
+	mux.HandleFunc("GET /api/customers", s.handleGetCustomers)
+	mux.HandleFunc("DELETE /api/customers/{id}", s.handleAnonymizeCustomer)
 	mux.HandleFunc("POST /api/inbox/fetch-cloud", s.handleFetchCloud)
 }
 
@@ -732,6 +737,11 @@ func (s *Server) handleParseOCR(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := ocr.ParseOCRText(req.RawText, knownVendors)
+	if res.Vendor != "" {
+		if suggested, err := s.ledger.GetSuggestedAccountForVendor(res.Vendor); err == nil {
+			res.SuggestedAccount = suggested
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -834,3 +844,31 @@ func (s *Server) handleFetchCloud(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleGetCustomers(w http.ResponseWriter, r *http.Request) {
+	customers, err := s.ledger.GetAllCustomers()
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if customers == nil {
+		customers = []models.Customer{}
+	}
+	json.NewEncoder(w).Encode(customers)
+}
+
+func (s *Server) handleAnonymizeCustomer(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, fmt.Errorf("invalid id"))
+		return
+	}
+
+	if err := s.ledger.AnonymizeCustomer(id); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}

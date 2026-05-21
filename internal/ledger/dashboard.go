@@ -74,5 +74,19 @@ func (l *Ledger) GetDashboardMetrics(yearID *int64) (*models.DashboardMetrics, e
 	metrics.Income = totalIncome
 	metrics.Expenses = totalExpenses
 
+	// Hämta utestående kundfordringar och antal obetalda bokförda fakturor för räkenskapsåret
+	var outstanding int64
+	var unpaidCount int
+	err = l.db.QueryRow(`
+		SELECT COALESCE(SUM(total_amount), 0), COUNT(*) 
+		FROM invoices 
+		WHERE fiscal_year_id = ? AND status = 'bokförd'
+	`, fy.ID).Scan(&outstanding, &unpaidCount)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query outstanding invoices: %w", err)
+	}
+	metrics.OutstandingReceivables = outstanding
+	metrics.UnpaidCount = unpaidCount
+
 	return metrics, nil
 }

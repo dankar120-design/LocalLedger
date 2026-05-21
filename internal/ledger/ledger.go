@@ -57,10 +57,41 @@ func OpenLedger(workspacePath string, currentAppVersion string) (l *Ledger, err 
 		}
 	}()
 
-	// 3.5. Kör migreringar
-	if err := runMigrations(db); err != nil {
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
+	// 3.5. Kör migreringar med Pre-Migration Backup
+	backupPath := dbPath + ".tmp_backup"
+	
+	// Rensa eventuell gammal kvarlämnad backup
+	if err := os.Remove(backupPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("failed to remove stale backup (file locked?): %w", err)
 	}
+
+	// Skapa atomär backup via VACUUM INTO
+	safeBackupPath := strings.ReplaceAll(backupPath, "'", "''")
+	backupQuery := fmt.Sprintf("VACUUM INTO '%s'", safeBackupPath)
+	if _, err := db.Exec(backupQuery); err != nil {
+		return nil, fmt.Errorf("failed to create pre-migration backup: %w", err)
+	}
+
+	// Utför migreringar
+	if err := runMigrations(db); err != nil {
+		// Stäng anslutningen för att släppa fil-låsningar (särskilt viktigt på Windows!)
+		db.Close()
+		
+		// Ta bort halvmigrerade filer
+		os.Remove(dbPath)
+		os.Remove(dbPath + "-wal")
+		os.Remove(dbPath + "-shm")
+		
+		// Återställ från backup
+		if renameErr := os.Rename(backupPath, dbPath); renameErr != nil {
+			return nil, fmt.Errorf("migration failed (%v) AND database recovery failed: %v", err, renameErr)
+		}
+		
+		return nil, fmt.Errorf("database migration failed; database was safely recovered to previous state: %w", err)
+	}
+
+	// Ta bort temporär backup vid lyckad migrering
+	os.Remove(backupPath)
 
 	// 4. Läs in schema_version
 	var dbVersion, minAppVersion string
@@ -189,3 +220,32 @@ func (l *Ledger) GetDistinctVendors() ([]string, error) {
 
 	return vendors, nil
 }
+
+// GetSuggestedAccountForVendor hämtar det senast använda kostnads- eller intäktskontot för en given leverantör/text.
+func (l *Ledger) GetSuggestedAccountForVendor(vendor string) (string, error) {
+	if vendor == "" {
+		return "", nil
+	}
+	query := `
+		SELECT r.account 
+		FROM verification_rows r
+		JOIN verifications v ON r.verification_id = v.id
+		WHERE v.text LIKE ?
+		  AND r.account NOT LIKE '19%' 
+		  AND r.account NOT LIKE '24%' 
+		  AND r.account NOT LIKE '26%'
+		  AND r.account NOT LIKE '15%'
+		ORDER BY v.date DESC, v.id DESC
+		LIMIT 1
+	`
+	var account string
+	err := l.db.QueryRow(query, "%"+vendor+"%").Scan(&account)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to get suggested account for vendor: %w", err)
+	}
+	return account, nil
+}
+

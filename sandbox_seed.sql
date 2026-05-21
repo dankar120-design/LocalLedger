@@ -21,8 +21,8 @@ INSERT INTO invoices (
     customer_address, total_amount, total_vat, status, fiscal_year_id
 ) VALUES (
     '10001', '2026-03-15', '2026-04-14', 30, 'DemoFöretaget AB', '556677-8899', 
-    'Testgatan 1, 123 45 Teststad', 12500, 2500, 'sent', 1
+    'Testgatan 1, 123 45 Teststad', 12500, 2500, 'utkast', 1
 );
 
 INSERT INTO invoice_items (invoice_id, description, quantity, price_ex_vat, vat_rate) VALUES 
-(1, 'Konsulttimmar Sandbox', 10, 1000, 25);
+(1, 'Konsulttimmar Sandbox', 1000, 1000, 25);

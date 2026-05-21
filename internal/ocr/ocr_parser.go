@@ -8,10 +8,11 @@ import (
 )
 
 type OCRResult struct {
-	Date        string `json:"date"`
-	AmountCents int64  `json:"amount_cents"`
-	Currency    string `json:"currency"`
-	Vendor      string `json:"vendor,omitempty"`
+	Date             string `json:"date"`
+	AmountCents      int64  `json:"amount_cents"`
+	Currency         string `json:"currency"`
+	Vendor           string `json:"vendor,omitempty"`
+	SuggestedAccount string `json:"suggested_account,omitempty"`
 }
 
 // Globala regex-motorer (kompileras endast en gång vid uppstart)

@@ -129,3 +129,79 @@ func TestDatabaseTrigger_BlocksUpdate(t *testing.T) {
 		t.Logf("Trigger blocked update successfully: %v", err)
 	}
 }
+
+func TestInvoiceDatabaseTrigger_BlocksUpdate(t *testing.T) {
+	workspace := setupTestWorkspace(t)
+	l, _ := OpenLedger(workspace, "v2.0.0")
+	defer l.Close()
+
+	// 1. Skapa en faktura och posta den (gör den bokförd)
+	invID, err := l.CreateInvoice(models.Invoice{
+		Date:             "2023-05-20",
+		DueDate:          "2023-06-20",
+		PaymentTermsDays: 30,
+		CustomerName:     "Test Customer",
+		TotalAmount:      12500,
+		TotalVat:         2500,
+		FiscalYearID:     1,
+		Items: []models.InvoiceItem{
+			{Description: "Test Item", Quantity: 100, PriceExVat: 10000, VatRate: 25},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create invoice: %v", err)
+	}
+
+	err = l.PostInvoice(invID, "User")
+	if err != nil {
+		t.Fatalf("Failed to post invoice: %v", err)
+	}
+
+	// 2. Försök att uppdatera ett fält som INTE är status (t.ex. total_amount) via direkt SQL
+	_, err = l.db.Exec("UPDATE invoices SET total_amount = 99999 WHERE id = ?", invID)
+	if err == nil {
+		t.Errorf("Expected SQLite trigger to block updating posted invoice total_amount, but it succeeded!")
+	} else {
+		t.Logf("Trigger blocked invoice total_amount update successfully: %v", err)
+	}
+
+	// 3. Försök att ta bort fakturan via direkt SQL
+	_, err = l.db.Exec("DELETE FROM invoices WHERE id = ?", invID)
+	if err == nil {
+		t.Errorf("Expected SQLite trigger to block deleting posted invoice, but it succeeded!")
+	} else {
+		t.Logf("Trigger blocked invoice delete successfully: %v", err)
+	}
+
+	// 4. Försök att uppdatera en fakturarad via direkt SQL
+	_, err = l.db.Exec("UPDATE invoice_items SET price_ex_vat = 50000 WHERE invoice_id = ?", invID)
+	if err == nil {
+		t.Errorf("Expected SQLite trigger to block updating posted invoice items, but it succeeded!")
+	} else {
+		t.Logf("Trigger blocked invoice items update successfully: %v", err)
+	}
+
+	// 5. Försök att lägga till en fakturarad via direkt SQL
+	_, err = l.db.Exec("INSERT INTO invoice_items (invoice_id, description, quantity, price_ex_vat, vat_rate) VALUES (?, 'Fusk', 100, 5000, 25)", invID)
+	if err == nil {
+		t.Errorf("Expected SQLite trigger to block inserting posted invoice items, but it succeeded!")
+	} else {
+		t.Logf("Trigger blocked invoice items insert successfully: %v", err)
+	}
+
+	// 6. Försök att ta bort en fakturarad via direkt SQL
+	_, err = l.db.Exec("DELETE FROM invoice_items WHERE invoice_id = ?", invID)
+	if err == nil {
+		t.Errorf("Expected SQLite trigger to block deleting posted invoice items, but it succeeded!")
+	} else {
+		t.Logf("Trigger blocked invoice items delete successfully: %v", err)
+	}
+
+	// 7. Kontrollera att uppdatering av status till 'betald' är TILLÅTEN
+	_, err = l.db.Exec("UPDATE invoices SET status = 'betald' WHERE id = ?", invID)
+	if err != nil {
+		t.Errorf("Expected SQLite trigger to allow updating posted invoice status, but it failed: %v", err)
+	} else {
+		t.Logf("Trigger allowed updating status to betald successfully")
+	}
+}

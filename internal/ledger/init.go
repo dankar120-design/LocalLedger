@@ -324,6 +324,48 @@ func runMigrations(db *sql.DB) error {
 			('3020', 'Försäljning tjänster', 'Intäkt') ON CONFLICT(code) DO NOTHING;
 		UPDATE schema_version SET version = 'v3.3.0', app_min_version = 'v2.0.0';
 		`,
+		// Version 14: Phase 8 - Kundregister & GDPR
+		`
+		CREATE TABLE IF NOT EXISTS customers (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			orgnr TEXT,
+			address TEXT,
+			created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+		);
+
+		INSERT INTO customers (name, orgnr, address)
+		SELECT DISTINCT customer_name, customer_orgnr, customer_address
+		FROM invoices
+		WHERE customer_name != '' AND customer_name IS NOT NULL
+		GROUP BY customer_name;
+
+		ALTER TABLE invoices ADD COLUMN customer_id INTEGER REFERENCES customers(id);
+
+		UPDATE invoices SET customer_id = (SELECT id FROM customers WHERE customers.name = invoices.customer_name);
+		
+		UPDATE schema_version SET version = 'v3.4.0', app_min_version = 'v2.0.0';
+		`,
+		// Version 15: Phase 9 - E2E Audit & Hardening (Invoices WORM Triggers)
+		`
+		CREATE TRIGGER IF NOT EXISTS protect_posted_invoices_delete BEFORE DELETE ON invoices FOR EACH ROW WHEN OLD.verification_id IS NOT NULL OR OLD.status != 'utkast' BEGIN SELECT RAISE(FAIL, 'WORM Violation: Cannot delete a posted invoice.'); END;
+		
+		CREATE TRIGGER IF NOT EXISTS protect_posted_invoices_update BEFORE UPDATE ON invoices FOR EACH ROW WHEN OLD.verification_id IS NOT NULL OR OLD.status != 'utkast' BEGIN SELECT CASE WHEN NEW.invoice_number IS NOT OLD.invoice_number OR NEW.date != OLD.date OR NEW.due_date != OLD.due_date OR NEW.payment_terms_days IS NOT OLD.payment_terms_days OR NEW.customer_id IS NOT OLD.customer_id OR NEW.customer_name != OLD.customer_name OR NEW.customer_orgnr IS NOT OLD.customer_orgnr OR NEW.customer_address IS NOT OLD.customer_address OR NEW.total_amount != OLD.total_amount OR NEW.total_vat != OLD.total_vat OR NEW.verification_id IS NOT OLD.verification_id OR NEW.credit_of IS NOT OLD.credit_of OR NEW.fiscal_year_id != OLD.fiscal_year_id THEN RAISE(FAIL, 'WORM Violation: Cannot modify accounting details of a posted invoice.') END; END;
+
+		CREATE TRIGGER IF NOT EXISTS protect_posted_invoice_items_update BEFORE UPDATE ON invoice_items FOR EACH ROW BEGIN SELECT CASE WHEN (SELECT verification_id FROM invoices WHERE id = OLD.invoice_id) IS NOT NULL THEN RAISE(FAIL, 'WORM Violation: Cannot update items of a posted invoice.') END; END;
+		CREATE TRIGGER IF NOT EXISTS protect_posted_invoice_items_insert BEFORE INSERT ON invoice_items FOR EACH ROW BEGIN SELECT CASE WHEN (SELECT verification_id FROM invoices WHERE id = NEW.invoice_id) IS NOT NULL THEN RAISE(FAIL, 'WORM Violation: Cannot insert items into a posted invoice.') END; END;
+		CREATE TRIGGER IF NOT EXISTS protect_posted_invoice_items_delete BEFORE DELETE ON invoice_items FOR EACH ROW BEGIN SELECT CASE WHEN (SELECT verification_id FROM invoices WHERE id = OLD.invoice_id) IS NOT NULL THEN RAISE(FAIL, 'WORM Violation: Cannot delete items from a posted invoice.') END; END;
+
+		UPDATE schema_version SET version = 'v3.5.0', app_min_version = 'v2.0.0';
+		`,
+		// Version 16: Lägg till saknade BAS-konton för 12%, 6% och 0% moms (2621, 2631, 3004)
+		`
+		INSERT INTO accounts (code, name, type) VALUES 
+			('2621', 'Utgående moms på försäljning inom Sverige, 12 %', 'Skuld'),
+			('2631', 'Utgående moms på försäljning inom Sverige, 6 %', 'Skuld'),
+			('3004', 'Momsfri försäljning inom Sverige', 'Intäkt') ON CONFLICT(code) DO NOTHING;
+		UPDATE schema_version SET version = 'v3.6.0', app_min_version = 'v2.0.0';
+		`,
 	}
 
 	for i := currentVersion; i < len(migrations); i++ {

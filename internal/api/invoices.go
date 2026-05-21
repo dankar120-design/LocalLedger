@@ -43,6 +43,9 @@ func (s *Server) HandleCreateInvoice(w http.ResponseWriter, r *http.Request) {
 	}
 	inv.FiscalYearID = yearID.ID
 
+	// SECURITY: Ensure external API cannot spoof credit invoices
+	inv.CreditOf = nil
+
 	id, err := s.ledger.CreateInvoice(inv)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

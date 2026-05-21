@@ -49,12 +49,35 @@
       x-init="$watch('theme', val => localStorage.setItem('theme', val))"
       @cmd-nav.window="showView($event.detail)"
       @cmd-action.window="handleCmdAction($event.detail)">
-
     <!-- Sidebar -->
     <aside class="sidebar">
-        <div class="logo">
-            <svg class="logo-icon-svg" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-            LocalLedger
+        <!-- Logo Area with dynamic upload support & fallback -->
+        <div class="logo" style="display: flex; align-items: center; gap: 0.75rem; padding: 1.5rem 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem;">
+            <template x-if="settings.logo_path">
+                <img :src="'/api/settings/logo?cb=' + logoCacheBuster" style="max-height: 36px; max-width: 36px; border-radius: 4px; object-fit: contain;" alt="Företagslogotyp">
+            </template>
+            <template x-if="!settings.logo_path">
+                <svg class="logo-icon-svg" viewBox="0 0 24 24" style="height: 28px; width: 28px;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            </template>
+            <span style="font-weight: 700; font-size: 1.15rem; letter-spacing: -0.02em; color: var(--text-main);">LocalLedger</span>
+        </div>
+
+        <!-- Global Fiscal Year Switcher Sidebar Card -->
+        <div class="fiscal-year-sidebar" style="margin: 0 1rem 1.25rem 1rem; padding: 0.75rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px;">
+            <label style="display: block; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.4rem;">Aktivt Räkenskapsår</label>
+            <select x-model="activeFiscalYearId" @change="fetchVerifications(); syncFormDateWithFiscalYear();" class="form-control" style="width: 100%; padding: 0.4rem 0.5rem; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 6px; font-size: 0.85rem; margin-bottom: 0.5rem;">
+                <template x-for="fy in fiscalYears" :key="fy.id">
+                    <option :value="fy.id" x-text="fy.start_date.substring(0,4) === fy.end_date.substring(0,4) ? fy.start_date.substring(0,4) + (fy.is_locked ? ' (Låst)' : '') : fy.start_date.substring(0,4) + '/' + fy.end_date.substring(0,4) + (fy.is_locked ? ' (Låst)' : '')"></option>
+                </template>
+            </select>
+            <div style="display: flex; gap: 0.4rem;">
+                <button @click="createFiscalYear()" class="btn primary" style="flex: 1; padding: 0.35rem 0.5rem; font-size: 0.75rem; justify-content: center; display: flex; align-items: center; gap: 0.25rem; background: var(--accent); color: #fff; border-radius: 4px; border: none; cursor: pointer; font-weight: 500;">
+                    <svg class="nav-icon" style="width: 12px; height: 12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg> Nytt år
+                </button>
+                <button x-show="fiscalYears.length > 0 && !fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked" @click="lockFiscalYear(activeFiscalYearId)" class="btn btn-danger" style="flex: 1; padding: 0.35rem 0.5rem; font-size: 0.75rem; justify-content: center; background: var(--danger); opacity: 0.95; display: flex; align-items: center; gap: 0.25rem; border-radius: 4px; border: none; color: white; cursor: pointer; font-weight: 500;">
+                    <svg class="nav-icon" style="width: 12px; height: 12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> Lås år
+                </button>
+            </div>
         </div>
         
         <nav>
@@ -67,31 +90,29 @@
             <a class="nav-item" href="#" @click.prevent="showView('kontoplan')" :class="showKontoplan ? 'active' : ''" style="display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg> Kontoplan</a>
             <a class="nav-item" href="#" @click.prevent="showView('installningar')" :class="showSettings ? 'active' : ''" style="display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Inställningar</a>
         </nav>
-        <div style="margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.5rem;">
-            <a class="nav-item" href="#" @click.prevent="downloadSamlingsplan()" style="display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Samlingsplan (.csv)</a>
-            <a class="nav-item" @click.prevent="fillGaps()" style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg> Laga Nummerserie</a>
-        </div>
-
-        <div class="status-badge" :class="!verifyOk ? 'error' : ''" style="margin-bottom: 1rem;">
-            <div class="status-dot"></div>
-            <span class="status-text" x-text="verifyStatus"></span>
-        </div>
-
-        <button @click="shutdownServer()" class="shutdown-btn" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg> Stäng av systemet
-        </button>
         
-        <!-- Theme Toggle (Kompakt) -->
-        <div class="theme-toggle" @click="theme = theme === 'dark' ? 'light' : 'dark'" title="Byt tema">
-            <svg x-show="theme === 'dark'" x-cloak class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
-            <svg x-show="theme === 'light'" x-cloak class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-        </div>
+        <div style="margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.75rem;">
+            <div class="status-badge" :class="!verifyOk ? 'error' : ''" style="margin-bottom: 0.25rem;">
+                <div class="status-dot"></div>
+                <span class="status-text" x-text="verifyStatus"></span>
+            </div>
 
-        <button @click="showBugLogger = true" class="nav-item" style="margin-top: 0.5rem; background: transparent; border: 1px solid var(--border); position: relative; width: 100%; justify-content: center;">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path></svg> Systemlogg
-            <span x-show="bugLog.length > 0" x-cloak style="position: absolute; top: -5px; right: -5px; width: 12px; height: 12px; background: var(--danger); border-radius: 50%; box-shadow: 0 0 8px var(--danger);"></span>
-        </button>
+            <!-- Sleek Row for Theme Toggle and Shutdown -->
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+                <div class="theme-toggle icon-btn-utility" @click="theme = theme === 'dark' ? 'light' : 'dark'" title="Byt tema" style="flex: 1; display: flex; justify-content: center; align-items: center; padding: 0.5rem; border-radius: 6px; height: 36px; cursor: pointer;">
+                    <svg x-show="theme === 'dark'" x-cloak class="nav-icon" style="margin: 0; width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                    <svg x-show="theme === 'light'" x-cloak class="nav-icon" style="margin: 0; width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                </div>
 
+                <button @click="shutdownServer()" class="icon-btn-utility danger-hover" title="Stäng av systemet" style="flex: 1; display: flex; justify-content: center; align-items: center; padding: 0.5rem; border-radius: 6px; height: 36px; border: 1px solid rgba(248, 113, 113, 0.2); cursor: pointer;">
+                    <svg class="nav-icon" style="margin: 0; width: 18px; height: 18px; color: var(--danger);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+                </button>
+            </div>
+
+            <button @click="showBugLogger = true" class="nav-item" style="background: transparent; border: 1px solid var(--border); position: relative; width: 100%; justify-content: center; padding: 0.4rem; border-radius: 6px; font-size: 0.8rem; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path></svg> Systemlogg
+                <span x-show="bugLog.length > 0" x-cloak style="position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; background: var(--danger); border-radius: 50%; box-shadow: 0 0 6px var(--danger);"></span>
+            </button>
         <div style="margin-top: 1.5rem; padding-top: 1.5rem; font-size: 0.75rem; color: var(--text-muted); opacity: 0.8; line-height: 1.4; border-top: 1px solid var(--border);">
             <strong>Ansvarsfriskrivning</strong><br>
             LocalLedger tillhandahålls i befintligt skick.
@@ -106,52 +127,151 @@
             </template>
         </datalist>
 
-        <header class="header">
+        <header class="header" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports && !showDashboard">
             <div>
                 <h1>Huvudbok</h1>
-                <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem;">
-                    <select x-model="activeFiscalYearId" @change="fetchVerifications(); syncFormDateWithFiscalYear();" class="form-control" style="width: auto; padding: 0.25rem 0.5rem; background: var(--surface); border: 1px solid var(--border); color: var(--text);">
-                        <template x-for="fy in fiscalYears" :key="fy.id">
-                            <option :value="fy.id" x-text="fy.start_date.substring(0,4) === fy.end_date.substring(0,4) ? fy.start_date.substring(0,4) + (fy.is_locked ? ' (Låst)' : '') : fy.start_date.substring(0,4) + '/' + fy.end_date.substring(0,4) + (fy.is_locked ? ' (Låst)' : '')"></option>
-                        </template>
-                    </select>
-                    
-                    <button @click="createFiscalYear()" class="btn primary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; display: flex; align-items: center; gap: 0.5rem; background: var(--accent); color: #fff;">
-                        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg> Nytt Räkenskapsår
-                    </button>
-                    
-                    <button x-show="fiscalYears.length > 0 && !fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked" @click="lockFiscalYear(activeFiscalYearId)" class="btn btn-danger" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; background: var(--danger); opacity: 0.8; display: flex; align-items: center; gap: 0.5rem;">
-                        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> Lås Detta År
-                    </button>
-                </div>
             </div>
             <div style="display: flex; gap: 0.5rem;">
                 <button class="primary" @click="fetchVerifications()" style="display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg> Uppdatera</button>
             </div>
         </header>
 
-        <!-- Mini Dashboard -->
-        <section class="panel mini-dashboard" x-show="showDashboard" x-transition x-cloak style="display: none;">
-            <div class="kpi-item">
-                <span class="kpi-label">Omsättning</span>
-                <span class="kpi-value" x-text="(dashboard.income / 100).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })"></span>
+        <!-- Redesigned Command Center Dashboard -->
+        <section class="panel dashboard-container" x-show="showDashboard" x-transition x-cloak style="display: none;">
+            <!-- VIP KPI Cards Grid -->
+            <div class="dashboard-grid">
+                <!-- Omsättning -->
+                <div class="kpi-card income-card">
+                    <div class="kpi-card-header">
+                        <span class="kpi-card-title">Omsättning</span>
+                        <svg class="kpi-card-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <span class="kpi-card-value" x-text="(dashboard.income / 100).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })"></span>
+                    <span class="kpi-card-footer">Ackumulerat under året</span>
+                </div>
+
+                <!-- Kostnader -->
+                <div class="kpi-card expenses-card">
+                    <div class="kpi-card-header">
+                        <span class="kpi-card-title">Kostnader</span>
+                        <svg class="kpi-card-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <span class="kpi-card-value" x-text="(dashboard.expenses / 100).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })"></span>
+                    <span class="kpi-card-footer">Utgifter och avskrivningar</span>
+                </div>
+
+                <!-- Resultat -->
+                <div class="kpi-card net-card" :class="dashboard.net >= 0 ? 'net-positive' : 'net-negative'">
+                    <div class="kpi-card-header">
+                        <span class="kpi-card-title">Resultat</span>
+                        <svg class="kpi-card-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                    </div>
+                    <span class="kpi-card-value" :class="dashboard.net >= 0 ? 'text-success' : 'text-danger'" x-text="(dashboard.net / 100).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })"></span>
+                    <span class="kpi-card-footer" x-text="dashboard.net >= 0 ? 'Vinstmarginal positiv' : 'Negativt resultat'"></span>
+                </div>
+
+                <!-- Kassa/Bank -->
+                <div class="kpi-card bank-card">
+                    <div class="kpi-card-header">
+                        <span class="kpi-card-title">Kassa / Bank</span>
+                        <svg class="kpi-card-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                    </div>
+                    <span class="kpi-card-value" x-text="(dashboard.bank / 100).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })"></span>
+                    <span class="kpi-card-footer">Likvida medel (Konto 1930)</span>
+                </div>
+
+                <!-- Kundfordringar -->
+                <div class="kpi-card ar-card">
+                    <div class="kpi-card-header">
+                        <span class="kpi-card-title">Kundfordringar</span>
+                        <svg class="kpi-card-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+                    </div>
+                    <span class="kpi-card-value" x-text="(dashboard.outstanding_receivables / 100).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })"></span>
+                    <span class="kpi-card-footer" x-text="dashboard.unpaid_count === 1 ? '1 obetald faktura' : (dashboard.unpaid_count || 0) + ' st obetalda fakturor'"></span>
+                </div>
             </div>
-            <div class="kpi-item">
-                <span class="kpi-label">Kostnader</span>
-                <span class="kpi-value" x-text="(dashboard.expenses / 100).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })"></span>
+
+            <!-- Quick Actions Grid -->
+            <div class="dashboard-actions-section">
+                <h3 class="dashboard-section-title">
+                    <svg style="width: 18px; height: 18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    Snabba Åtgärder
+                </h3>
+                <div class="actions-grid">
+                    <!-- Skapa Faktura -->
+                    <div class="action-card" @click="showView('fakturering'); setTimeout(() => { selectedInvoice = null; }, 50);">
+                        <div class="action-card-icon-container" style="background: rgba(6, 182, 212, 0.1); color: var(--primary);">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </div>
+                        <div class="action-card-content">
+                            <span class="action-card-title">Skapa Faktura</span>
+                            <span class="action-card-desc">Upprätta ett nytt fakturautkast i kundreskontran.</span>
+                        </div>
+                    </div>
+
+                    <!-- Registrera Kvitto -->
+                    <div class="action-card" @click="showView('huvudbok'); setTimeout(() => { $refs.formDesc.focus(); }, 150);">
+                        <div class="action-card-icon-container" style="background: rgba(16, 185, 129, 0.1); color: var(--success);">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        </div>
+                        <div class="action-card-content">
+                            <span class="action-card-title">Registrera Kvitto / Verifikat</span>
+                            <span class="action-card-desc">Bokför en ny verifikation och ladda upp underlag.</span>
+                        </div>
+                    </div>
+
+                    <!-- Öppna Inkorg -->
+                    <div class="action-card" @click="showView('huvudbok'); isInboxDrawerOpen = true;">
+                        <div class="action-card-icon-container" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+                        </div>
+                        <div class="action-card-content">
+                            <span class="action-card-title">Öppna Inboxen</span>
+                            <span class="action-card-desc">Se dina inkommande och herrelösa underlagsfiler.</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="kpi-item">
-                <span class="kpi-label">Resultat</span>
-                <span class="kpi-value" :class="dashboard.net >= 0 ? 'text-success' : 'text-danger'" x-text="(dashboard.net / 100).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })"></span>
-            </div>
-            <div class="kpi-item">
-                <span class="kpi-label">Kassa/Bank</span>
-                <span class="kpi-value" x-text="(dashboard.bank / 100).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })"></span>
+
+            <!-- Status Cards Section (VAT & Cryptographic WORM Status) -->
+            <div class="status-grid">
+                <!-- VAT Status Card -->
+                <div class="status-card clickable" @click="showView('momsredovisning')">
+                    <span class="status-card-title">Momsindikator</span>
+                    <div class="vat-indicator-container">
+                        <div style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; background: rgba(59, 130, 246, 0.1); color: var(--primary); flex-shrink: 0;">
+                            <svg style="width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        </div>
+                        <div>
+                            <div class="status-value-sub">Momsredovisning</div>
+                            <p class="status-desc">Se din aktuella skatteskuld eller momsfordran baserat på perioder. Klicka här för att öppna momsdeklarationen.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WORM Cryptographic Chain Health Badge Card -->
+                <div class="status-card">
+                    <span class="status-card-title">Legalt WORM-Status</span>
+                    <div class="worm-health-container">
+                        <div style="display: flex; gap: 1rem; align-items: flex-start; margin-bottom: 0.75rem;">
+                            <div style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; background: rgba(16, 185, 129, 0.1); color: var(--success); flex-shrink: 0;">
+                                <svg style="width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                            </div>
+                            <div>
+                                <div class="pulsing-badge-container">
+                                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #34d399; animation: ocr-spin 2s linear infinite;"></span>
+                                    <span class="status-text-large">WORM Aktiv (BFL-Compliant)</span>
+                                </div>
+                                <p class="status-desc" style="margin-top: 0.5rem;">Kryptografisk oföränderlighet är aktiverad i SQLite. Verifikationer äldre än 24 timmar är hermetiskt förseglade i enlighet med Bokföringslagen (BFL).</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 
         <!-- Bokföringsformulär -->
-        <section class="panel" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports && fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked">
+        <section class="panel" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports && !showDashboard && fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked">
             <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
                 <svg class="icon-xl" style="color: var(--text-muted); margin-bottom: 1rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                 <h2>Räkenskapsåret är låst</h2>
@@ -159,7 +279,7 @@
             </div>
         </section>
 
-        <section class="panel" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports && !(fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked)" @keydown.window.ctrl.enter.prevent="submitPost()">
+        <section class="panel" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports && !showDashboard && !(fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked)" @keydown.window.ctrl.enter.prevent="submitPost()">
             <h2 style="margin-bottom: 1rem; font-size: 1.1rem;">Ny Verifikation</h2>
 
             <div class="magic-wand-container">
@@ -277,7 +397,7 @@
         </section>
 
         <!-- Tabell -->
-        <section class="panel" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports">
+        <section class="panel" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports && !showDashboard">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <input type="text" x-model="searchQuery" placeholder="Sök konto, text, ID..." style="max-width: 300px;">
                 <button class="primary" style="background: var(--danger); box-shadow: 0 4px 12px rgba(248, 113, 113, 0.3); display: flex; align-items: center; gap: 0.5rem;" @click="showSealModal = true" title="Låser alla utkast äldre än 24h manuellt"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> WORM-Försegla Utkast</button>
@@ -291,6 +411,9 @@
                     </h2>
                     <p style="margin-bottom: 1rem; color: var(--text-main); line-height: 1.5;">
                         Du är på väg att <strong>kryptografiskt WORM-försegla</strong> alla obokförda utkast som är äldre än 24 timmar.
+                    </p>
+                    <p style="margin-bottom: 1rem; color: var(--warning); font-size: 0.9rem; line-height: 1.5; font-style: italic;">
+                        Observera: Gränsen på 24 timmar beräknas från när verifikationen <strong>registrerades i systemet</strong> (inmatningstid), inte från bokföringsdatumet. Detta garanterar att du alltid har 24 timmar på dig att rätta nya poster.
                     </p>
                     <p style="margin-bottom: 1.5rem; color: var(--text-muted); font-size: 0.9rem; line-height: 1.5;">
                         Denna handling är <strong>irreversibel</strong> enligt Bokföringslagen. En hashad verifikation kan aldrig mer raderas eller ändras, endast korrigeras via en spårbar storno-verifikation.
@@ -311,7 +434,7 @@
                         <th>Beskrivning</th>
                         <th>Belopp (D/K)</th>
                         <th>Integritet</th>
-                        <th>Ãƒâ€¦tgärd</th>
+                        <th>Åtgärd</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -371,7 +494,7 @@
         </section>
 
         <!-- Inbox Drawer -->
-        <section class="inbox-drawer" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports" :class="isInboxDrawerOpen ? 'open' : ''">
+        <section class="inbox-drawer" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports && !showDashboard" :class="isInboxDrawerOpen ? 'open' : ''">
             <div class="inbox-drawer-header" @click="isInboxDrawerOpen = !isInboxDrawerOpen">
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
@@ -592,6 +715,36 @@
         <section class="panel" x-show="showSettings" style="display: none;">
             <h2 style="margin-bottom: 1rem; font-size: 1.1rem;">Företagsinställningar</h2>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                <!-- Drag-and-drop Logo Upload zone -->
+                <div class="form-group" style="grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr; gap: 1.5rem; background: rgba(255, 255, 255, 0.02); border: 1px dashed var(--border); border-radius: 8px; padding: 1.25rem; align-items: center;"
+                     @dragover.prevent="$el.classList.add('dragover')" 
+                     @dragleave.prevent="$el.classList.remove('dragover')" 
+                     @drop.prevent="$el.classList.remove('dragover'); uploadLogo($event)">
+                    <div style="position: relative; width: 100px; height: 100px; border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; background: var(--surface); overflow: hidden;">
+                        <template x-if="settings.logo_path">
+                            <img :src="'/api/settings/logo?cb=' + logoCacheBuster" style="max-height: 100%; max-width: 100%; object-fit: contain;" alt="Logotyp förhandsvisning">
+                        </template>
+                        <template x-if="!settings.logo_path">
+                            <svg class="logo-icon-svg" viewBox="0 0 24 24" style="height: 48px; width: 48px; opacity: 0.5;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                        </template>
+                    </div>
+                    <div>
+                        <label style="font-weight: 600; margin-bottom: 0.25rem; display: block; color: var(--text-main);">Företagslogotyp</label>
+                        <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 0.5rem;">
+                            Dra och släpp en logotyp (SVG, PNG, JPG/JPEG) hit, eller klicka för att bläddra.
+                        </span>
+                        <input type="file" @change="uploadLogo($event)" accept="image/svg+xml,image/png,image/jpeg" style="display: none;" id="logo-upload-input">
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <button class="btn" onclick="document.getElementById('logo-upload-input').click()" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Välj fil</button>
+                            <template x-if="settings.logo_path">
+                                <button class="btn btn-danger" @click="settings.logo_path = ''; saveSettings();" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; background: var(--danger); border: none; color: white;">Ta bort</button>
+                            </template>
+                        </div>
+                        <div style="background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.15); border-radius: 6px; padding: 0.5rem 0.75rem; margin-top: 0.75rem; font-size: 0.75rem; color: var(--primary); line-height: 1.35;">
+                            <strong>💡 Tips för optimal upplösning:</strong> Ladda gärna upp din logotyp i <strong>SVG-format</strong> för knivskarpa detaljer på fakturor. Andra godkända format är PNG och JPG (max 5MB).
+                        </div>
+                    </div>
+                </div>
                 <div class="form-group">
                     <label>Företagsnamn (För SIE-4)</label>
                     <input type="text" x-model="settings.name" placeholder="T.ex. Mitt Företag AB">
@@ -627,11 +780,59 @@
             
             <h2 style="margin-bottom: 1rem; font-size: 1.1rem;">Säkerhetskopia & Export</h2>
             <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;"><strong>Fullständig Säkerhetskopia (Rekommenderas)</strong><br>Ladda ner en .zip-fil innehållande hela din databas och alla dina WORM-låsta PDF-kvitton. Spara denna externt (USB/Moln) regelbundet för att uppfylla bokföringslagens krav på säkerhet mot dataförlust.</p>
-            <a href="/api/export/backup" class="btn" style="background-color: #3b82f6; color: white; text-align: center; display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; padding: 10px 20px; font-weight: bold; border-radius: 4px; margin-bottom: 1.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Ladda ner Säkerhetskopia (.zip)</a>
-            <button class="btn" @click="showRestoreModal = true" style="background-color: var(--danger); box-shadow: 0 4px 12px rgba(248, 113, 113, 0.3); color: white; text-align: center; display: inline-flex; align-items: center; gap: 0.5rem; padding: 10px 20px; font-weight: bold; border-radius: 4px; margin-bottom: 1.5rem; border: none; cursor: pointer;"><svg class="nav-icon" style="color: var(--warning);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg> Återställ från Säkerhetskopia</button>
+            
+            <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; color: #f59e0b; font-size: 0.9rem; line-height: 1.4; display: flex; align-items: center; gap: 0.75rem;">
+                <svg class="nav-icon" style="color: #f59e0b; width: 24px; height: 24px; flex-shrink: 0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                <span><strong>Lagstadgad information (BFL):</strong> Amerikanska molntjänster är endast komplement till fysiska EU-lagrade backuper (BFL 7 kap 1§).</span>
+            </div>
+
+            <button class="btn" @click="openBackupModal()" style="background-color: #3b82f6; color: white; text-align: center; display: inline-flex; align-items: center; gap: 0.5rem; padding: 10px 20px; font-weight: bold; border-radius: 4px; margin-bottom: 1.5rem; border: none; cursor: pointer;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Ladda ner Säkerhetskopia (.zip)</button>
+            <button class="btn" @click="showRestoreModal = true; restorePasswordRequired = false; restoreFileToUpload = null; restorePassword = '';" style="background-color: var(--danger); box-shadow: 0 4px 12px rgba(248, 113, 113, 0.3); color: white; text-align: center; display: inline-flex; align-items: center; gap: 0.5rem; padding: 10px 20px; font-weight: bold; border-radius: 4px; margin-bottom: 1.5rem; border: none; cursor: pointer;"><svg class="nav-icon" style="color: var(--warning);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg> Återställ från Säkerhetskopia</button>
+
+            <!-- Backup Modal (Export) -->
+            <div x-show="showBackupModal" @keydown.escape.window="if(showBackupModal && !isExportingBackup) showBackupModal = false" tabindex="-1" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999;" x-cloak>
+                <div class="panel" style="max-width: 500px; width: 100%; border: 1px solid var(--primary); box-shadow: 0 20px 40px rgba(0,0,0,0.5); background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border-radius: 12px; padding: 2rem;">
+                    <h2 style="color: var(--primary); display: flex; align-items: center; gap: 0.5rem; margin-top: 0; margin-bottom: 1.5rem; font-size: 1.4rem;">
+                        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Exportera Säkerhetskopia
+                    </h2>
+
+                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+                        <h4 style="color: var(--warning); margin: 0 0 0.5rem 0; font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem;">
+                            <svg class="nav-icon" style="color: var(--warning); width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
+                            Lagstadgade Krav & Lösenordsvarning
+                        </h4>
+                        <p style="margin: 0; color: var(--text-muted); font-size: 0.85rem; line-height: 1.4;">
+                            Bokföringslagen (7 kap 1§) kräver att din huvudsakliga bokföring och underlag sparas inom EU/EES. 
+                            Om du synkar denna backup till molnet (t.ex. Google Drive) måste det anses som ett <em>komplement</em> till din lokala lagring.
+                        </p>
+                        <p style="margin: 0.5rem 0 0 0; color: #f87171; font-size: 0.85rem; font-weight: bold; line-height: 1.4;">
+                            Krypterar du med AES-256 måste du spara lösenordet säkert! Om du glömmer lösenordet går din bokföring förlorad permanent.
+                        </p>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 1.5rem;">
+                        <label style="color: var(--text-main); font-weight: bold; font-size: 0.9rem; margin-bottom: 0.5rem; display: block;">Välj kryptering (AES-256)</label>
+                        <input type="password" x-model="backupPassword" placeholder="Skriv lösenord för att kryptera (lämna tomt för okrypterad)..." style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg); color: var(--text); box-sizing: border-box; font-size: 0.95rem;">
+                    </div>
+
+                    <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
+                        <button @click="showBackupModal = false; backupPassword = '';" style="background: transparent; border: 1px solid var(--border-color); color: var(--text); padding: 8px 16px; border-radius: 4px; cursor: pointer;">Avbryt</button>
+                        
+                        <button class="btn primary" @click="exportBackup(backupPassword)" :disabled="isExportingBackup" style="background: var(--primary); color: white; padding: 10px 20px; font-weight: bold; border-radius: 4px; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+                            <span x-show="!isExportingBackup">Ladda ner (.zip<span x-show="backupPassword">.enc</span>)</span>
+                            <span x-show="isExportingBackup">Genererar...</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             <!-- Restore Modal -->
-            <div x-show="showRestoreModal" @keydown.escape.window="if(showRestoreModal && !restoreComplete) showRestoreModal = false" tabindex="-1" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999;" x-cloak>
+            <div x-show="showRestoreModal" @keydown.escape.window="if(showRestoreModal && !restoreComplete && !isRestoring) showRestoreModal = false" tabindex="-1" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999;" x-cloak>
                 <div class="panel" style="max-width: 500px; width: 100%; border: 1px solid var(--danger); box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
                     <h2 style="color: var(--danger); display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
                         <svg class="nav-icon" style="color: var(--warning);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg> Katastrofåterställning
@@ -639,16 +840,34 @@
                     
                     <template x-if="!restoreComplete">
                         <div>
-                            <p style="margin-bottom: 1rem; color: var(--text-main); line-height: 1.5;">
-                                Du är på väg att skriva över hela din nuvarande databas och alla kvitton med innehållet från en säkerhetskopia (.zip). <strong>Detta går inte att ångra.</strong>
-                            </p>
-                            <p style="margin-bottom: 1.5rem; color: var(--text-muted); font-size: 0.9rem;">
-                                Om återställningen lyckas kommer programmet att stänga av sig själv för att byta ut filerna säkert. Du får sedan starta det igen.
-                            </p>
-                            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-                                <button @click="showRestoreModal = false">Avbryt</button>
-                                <input type="file" id="restoreUpload" accept=".zip" style="display: none;" @change="uploadRestoreFile($event)">
-                                <label for="restoreUpload" class="btn primary" style="background: var(--danger); cursor: pointer;">Fortsätt och välj fil</label>
+                            <div x-show="!restorePasswordRequired">
+                                <p style="margin-bottom: 1rem; color: var(--text-main); line-height: 1.5;">
+                                    Du är på väg att skriva över hela din nuvarande databas och alla kvitton med innehållet från en säkerhetskopia (.zip). <strong>Detta går inte att ångra.</strong>
+                                </p>
+                                <p style="margin-bottom: 1.5rem; color: var(--text-muted); font-size: 0.9rem;">
+                                    Om återställningen lyckas kommer programmet att stänga av sig själv för att byta ut filerna säkert. Du får sedan starta det igen.
+                                </p>
+                                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                                    <button @click="showRestoreModal = false" style="background: transparent; border: 1px solid var(--border-color); color: var(--text); padding: 8px 16px; border-radius: 4px; cursor: pointer;">Avbryt</button>
+                                    <input type="file" id="restoreUpload" accept=".zip,.enc" style="display: none;" @change="uploadRestoreFile($event)">
+                                    <label for="restoreUpload" class="btn primary" style="background: var(--danger); cursor: pointer; padding: 10px 20px; font-weight: bold; border-radius: 4px;">Fortsätt och välj fil</label>
+                                </div>
+                            </div>
+                            <div x-show="restorePasswordRequired" style="margin-top: 1rem;">
+                                <p style="margin-bottom: 1rem; color: var(--text-main); line-height: 1.5;">
+                                    Denna säkerhetskopia är <strong>krypterad</strong>. Vänligen ange lösenordet för att dekryptera och återställa den:
+                                </p>
+                                <div class="form-group" style="margin-bottom: 1.5rem;">
+                                    <label style="color: var(--primary); font-weight: bold; margin-bottom: 0.5rem; display: block;">Lösenord för dekryptering</label>
+                                    <input type="password" x-model="restorePassword" placeholder="Ange lösenord..." style="width: 100%; padding: 10px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg); color: var(--text); box-sizing: border-box;">
+                                </div>
+                                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                                    <button @click="showRestoreModal = false; restorePasswordRequired = false; restoreFileToUpload = null; restorePassword = '';" style="background: transparent; border: 1px solid var(--border-color); color: var(--text); padding: 8px 16px; border-radius: 4px; cursor: pointer;">Avbryt</button>
+                                    <button class="btn primary" @click="uploadRestoreFile(null, restorePassword)" :disabled="!restorePassword || isRestoring" style="background: var(--success); color: white; padding: 10px 20px; font-weight: bold; border-radius: 4px; border: none; cursor: pointer;">
+                                        <span x-show="!isRestoring">Avkryptera & Återställ</span>
+                                        <span x-show="isRestoring">Dekrypterar...</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </template>
@@ -680,6 +899,51 @@
             <div style="background: var(--bg); border: 1px dashed var(--border-color); padding: 1rem; border-radius: 4px; text-align: center;">
                 <input type="file" id="sieUpload" accept=".se" style="display: none;" @change="uploadSIEFile($event)">
                 <label for="sieUpload" class="btn" style="background-color: #8b5cf6; color: white; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; padding: 10px 20px; font-weight: bold; border-radius: 4px;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg> Välj SIE-4 fil att importera</label>
+            </div>
+
+            <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--border-color);">
+
+            <h2 style="margin-bottom: 1rem; font-size: 1.1rem;">Kundregister & GDPR-anonymisering</h2>
+            <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">
+                Här kan du se alla kunder i systemet och utföra GDPR-anonymisering för kunder som begärt att bli raderade.
+                Fakturor och verifikationer sparas enligt Bokföringslagen i 7 år, men personuppgifter i kundregistret pseudonymiseras omedelbart.
+            </p>
+            <div style="overflow-x: auto; background: var(--bg-body); border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 1.5rem;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--border-color); background: rgba(255, 255, 255, 0.02);">
+                            <th style="padding: 12px 16px; font-weight: 600; color: var(--text-main);">Namn</th>
+                            <th style="padding: 12px 16px; font-weight: 600; color: var(--text-main);">Org.nr</th>
+                            <th style="padding: 12px 16px; font-weight: 600; color: var(--text-main);">Adress</th>
+                            <th style="padding: 12px 16px; font-weight: 600; color: var(--text-main); text-align: right;">Åtgärd</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="c in customers" :key="c.id">
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                <td style="padding: 12px 16px; color: var(--text);" x-text="c.name"></td>
+                                <td style="padding: 12px 16px; color: var(--text);" x-text="c.orgnr || '—'"></td>
+                                <td style="padding: 12px 16px; color: var(--text);" x-text="c.address || '—'"></td>
+                                <td style="padding: 12px 16px; text-align: right;">
+                                    <button class="btn btn-danger" 
+                                            @click="anonymizeCustomer(c.id)" 
+                                            :disabled="c.name === '[ANONYMISERAD]'"
+                                            style="padding: 4px 8px; font-size: 0.75rem; border-radius: 4px; background-color: var(--danger); border: none; cursor: pointer; color: white;"
+                                            :style="c.name === '[ANONYMISERAD]' ? 'opacity: 0.4; cursor: not-allowed;' : ''">
+                                        Anonymisera
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                        <template x-if="customers.length === 0">
+                            <tr>
+                                <td colspan="4" style="padding: 24px; text-align: center; color: var(--text-muted);">
+                                    Inga kunder registrerade än. Skapa en faktura för att lägga till en kund.
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
             </div>
         </section>
 
@@ -748,12 +1012,45 @@
                             <!-- Customer Details -->
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                                 <div style="grid-column: span 2;">
+                                    <label>Välj Kund</label>
+                                    <select class="form-control" 
+                                            :disabled="!!selectedInvoice.credit_of" 
+                                            style="width: 100%;"
+                                            @change="
+                                                const val = $event.target.value;
+                                                if (val === 'new') {
+                                                    selectedInvoice.customer_id = null;
+                                                    selectedInvoice.customer_name = '';
+                                                    selectedInvoice.customer_orgnr = '';
+                                                    selectedInvoice.customer_address = '';
+                                                } else if (val) {
+                                                    const cust = customers.find(c => c.id == val);
+                                                    if (cust) {
+                                                        selectedInvoice.customer_id = cust.id;
+                                                        selectedInvoice.customer_name = cust.name;
+                                                        selectedInvoice.customer_orgnr = cust.orgnr || '';
+                                                        selectedInvoice.customer_address = cust.address || '';
+                                                    }
+                                                } else {
+                                                    selectedInvoice.customer_id = null;
+                                                }
+                                            ">
+                                        <option value="">— Skapa ny kund (ange uppgifter nedan) —</option>
+                                        <template x-for="cust in customers" :key="cust.id">
+                                            <option :value="cust.id" 
+                                                    x-text="cust.name + (cust.orgnr ? ' (' + cust.orgnr + ')' : '')"
+                                                    :selected="selectedInvoice.customer_id == cust.id || (!selectedInvoice.customer_id && selectedInvoice.customer_name === cust.name)">
+                                            </option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div style="grid-column: span 2;">
                                     <label>Kundnamn</label>
-                                    <input x-model="selectedInvoice.customer_name" :disabled="selectedInvoice.credit_of" required type="text" class="form-control" style="width: 100%;">
+                                    <input x-model="selectedInvoice.customer_name" :disabled="!!selectedInvoice.credit_of" required type="text" class="form-control" style="width: 100%;">
                                 </div>
                                 <div>
                                     <label>Org.nr (Valfritt)</label>
-                                    <input x-model="selectedInvoice.customer_orgnr" :disabled="selectedInvoice.credit_of" type="text" class="form-control" style="width: 100%;">
+                                    <input x-model="selectedInvoice.customer_orgnr" :disabled="!!selectedInvoice.credit_of" type="text" class="form-control" style="width: 100%;">
                                 </div>
                                 <div>
                                     <label>Fakturadatum</label>
@@ -761,7 +1058,7 @@
                                 </div>
                                 <div style="grid-column: span 2;">
                                     <label>Adress</label>
-                                    <input x-model="selectedInvoice.customer_address" :disabled="selectedInvoice.credit_of" required type="text" class="form-control" style="width: 100%;">
+                                    <input x-model="selectedInvoice.customer_address" :disabled="!!selectedInvoice.credit_of" required type="text" class="form-control" style="width: 100%;">
                                 </div>
                                 <div style="grid-column: span 2;" x-show="!selectedInvoice.credit_of">
                                     <label>Betalningsvillkor (dagar)</label>
@@ -780,11 +1077,11 @@
                                     <template x-for="(item, index) in selectedInvoice.items" :key="index">
                                         <div style="display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.75rem; background: var(--bg-body); border: 1px solid var(--border); border-radius: 4px;">
                                             <div style="flex: 1; display: flex; flex-direction: column; gap: 0.5rem;">
-                                                <input x-model="item.description" :disabled="selectedInvoice.credit_of" placeholder="Beskrivning" required class="form-control" style="width: 100%;">
+                                                <input x-model="item.description" :disabled="!!selectedInvoice.credit_of" placeholder="Beskrivning" required class="form-control" style="width: 100%;">
                                                 <div style="display: flex; gap: 0.5rem;">
                                                     <input x-model.number="item.quantity_float" @input="recalcInvoice" type="number" step="0.01" :max="selectedInvoice.credit_of ? 0 : null" :min="selectedInvoice.credit_of ? null : 0" placeholder="Antal" required class="form-control" style="width: 80px;">
-                                                    <input x-model.number="item.price_float" :disabled="selectedInvoice.credit_of" @input="recalcInvoice" type="number" step="0.01" min="0" placeholder="A-pris exkl. moms" required class="form-control" style="width: 120px;">
-                                                    <select x-model.number="item.vat_rate" :disabled="selectedInvoice.credit_of" @change="recalcInvoice" class="form-control" style="width: 110px;">
+                                                    <input x-model.number="item.price_float" :disabled="!!selectedInvoice.credit_of" @input="recalcInvoice" type="number" step="0.01" min="0" placeholder="A-pris exkl. moms" required class="form-control" style="width: 120px;">
+                                                    <select x-model.number="item.vat_rate" :disabled="!!selectedInvoice.credit_of" @change="recalcInvoice" class="form-control" style="width: 110px;">
                                                         <option value="25">25% Moms</option>
                                                         <option value="12">12% Moms</option>
                                                         <option value="6">6% Moms</option>
@@ -1045,11 +1342,11 @@
 
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 0;">
                     <div>
-                        <h3 style="margin: 0 0 4px 0;">Databas-backup</h3>
-                        <p style="margin: 0; color: var(--text-muted); font-size: 0.9rem;">Ladda ner hela LocalLedger-databasen (SQLite). Innehåller alla år, inställningar och konton.</p>
+                        <h3 style="margin: 0 0 4px 0;">Säkerhetskopiering</h3>
+                        <p style="margin: 0; color: var(--text-muted); font-size: 0.9rem;">Exportera hela din databas och dina WORM-låsta PDF-kvitton i en ZIP-fil (krypterad eller okrypterad).</p>
                     </div>
                     <div style="display: flex; gap: 12px; align-items: center;">
-                        <button class="btn btn-secondary" @click="exportBackup()" :disabled="isExportingBackup">Ladda ner Backup (.db)</button>
+                        <button class="btn primary" @click="openBackupModal()" :disabled="isExportingBackup">Ladda ner Backup (.zip)</button>
                     </div>
                 </div>
             </div>
@@ -1112,7 +1409,7 @@
                                 </template>
                             </select>
                             <input type="file" x-ref="sieFileInput" accept=".se,.si" style="display: none;" @change="handleSieSelected">
-                            <button class="btn btn-secondary" @click=".sieFileInput.click()">Välj .se fil</button>
+                            <button class="btn btn-secondary" @click="$refs.sieFileInput.click()">Välj .se fil</button>
                         </div>
                         <button class="btn btn-danger" @click="uploadSieFile()" :disabled="!selectedSieFile || !importSieYear || isUploadingSie">Importera SIE</button>
                         <span x-show="selectedSieFile" x-text="selectedSieFile ? selectedSieFile.name : ''" style="font-size: 0.8rem; color: var(--primary);"></span>
@@ -1121,16 +1418,56 @@
 
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 0;">
                     <div>
-                        <h3 style="margin: 0 0 4px 0;">Återställ Databas-backup</h3>
-                        <p style="margin: 0; color: var(--text-muted); font-size: 0.9rem;">Skriver över <strong>HELA</strong> databasen med en uppladdad .db-fil. All nuvarande data går förlorad.</p>
+                        <h3 style="margin: 0 0 4px 0;">Återställ från Säkerhetskopia</h3>
+                        <p style="margin: 0; color: var(--text-muted); font-size: 0.9rem;">Återställ hela din databas och dina WORM-låsta PDF-kvitton (.zip or krypterad .zip.enc). All nuvarande data går förlorad.</p>
                     </div>
-                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
-                        <input type="file" x-ref="backupFileInput" accept=".db" style="display: none;" @change="handleBackupSelected">
-                        <div style="display: flex; gap: 8px;">
-                            <button class="btn btn-secondary" @click=".backupFileInput.click()">Välj .db fil</button>
-                            <button class="btn btn-danger" @click="uploadBackupFile()" :disabled="!selectedBackupFile || isUploadingBackup">Återställ Databas</button>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <button class="btn btn-danger" @click="showRestoreModal = true; restorePasswordRequired = false; restoreFileToUpload = null; restorePassword = '';">Återställ (.zip / .enc)</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Systemunderhåll & Avstämning -->
+            <div class="panel" style="margin-bottom: 2rem;">
+                <h2 style="margin-top: 0; margin-bottom: 1rem; color: var(--primary); display: flex; align-items: center; gap: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                    Systemunderhåll & Avstämning
+                </h2>
+
+                <div class="actions-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+                    <!-- Laga Nummerserie -->
+                    <div class="action-card" @click="$parent.fillGaps()">
+                        <div class="action-card-icon-container" style="background: rgba(248, 113, 113, 0.1); color: var(--danger);">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
                         </div>
-                        <span x-show="selectedBackupFile" x-text="selectedBackupFile ? selectedBackupFile.name : ''" style="font-size: 0.8rem; color: var(--primary);"></span>
+                        <div class="action-card-content">
+                            <span class="action-card-title">Laga Nummerserie</span>
+                            <span class="action-card-desc">Leta efter glapp i verifikationsnumren och generera makuleringsposter.</span>
+                        </div>
+                    </div>
+
+                    <!-- Samlingsplan (.csv) -->
+                    <div class="action-card" @click="$parent.downloadSamlingsplan()">
+                        <div class="action-card-icon-container" style="background: rgba(59, 130, 246, 0.1); color: var(--primary);">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        </div>
+                        <div class="action-card-content">
+                            <span class="action-card-title">Exportera Samlingsplan (.csv)</span>
+                            <span class="action-card-desc">Exportera hela kontoplanen med aktuella kontotyper som en CSV-fil.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.15); border-radius: 8px; padding: 1rem; margin-top: 1.5rem; color: #f59e0b; font-size: 0.85rem; line-height: 1.4; display: flex; align-items: start; gap: 0.75rem;">
+                    <svg class="nav-icon" style="color: #f59e0b; width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    <div>
+                        <strong>Lagstadgade Krav (BFL / Bokföringsnämnden):</strong>
+                        Bokföringslagen kräver en obruten nummerserie för alla verifikationer för att garantera full spårbarhet och motverka manipulation av räkenskaperna. 
+                        Eventuella luckor orsakade av misslyckade transaktioner eller avbruten lagring <em>måste</em> dokumenteras. Systemet gör detta automatiskt genom att fylla glapp med förklarande makuleringsposter utan belopp.
                     </div>
                 </div>
             </div>
@@ -1139,7 +1476,8 @@
         <!-- Rapporter -->
         <section class="panel" x-show="showReports" id="printable-report" style="display: none; padding: 40px; background: white; color: black; border-radius: 8px;" x-cloak>
             <div x-show="isLoadingReport" style="text-align: center; padding: 2rem;">Laddar rapport...</div>
-            <div x-show="!isLoadingReport && financialReport">
+            <template x-if="!isLoadingReport && financialReport">
+                <div>
                 <div class="print-controls" style="display: flex; justify-content: flex-end; gap: 1rem; margin-bottom: 2rem;">
                     <button class="btn btn-secondary" onclick="window.print()" style="color: var(--text);">Skriv ut rapport (PDF)</button>
                     <button class="btn primary" @click="downloadExcel()">Ladda ner till Excel (.csv)</button>
@@ -1267,11 +1605,45 @@
                         </tr>
                     </tbody>
                 </table>
-            </div>
+                </div>
+            </template>
         </section>
 
 
     </div>
+
+    <!-- Glassmorphic Shutdown Overlay -->
+    <div x-show="showShutdown" x-transition.opacity x-cloak style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 999999;">
+        <div style="text-align: center; max-width: 400px; padding: 2rem; border-radius: 12px; background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(248, 113, 113, 0.2); box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+            <div style="display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 50%; background: rgba(248, 113, 113, 0.1); border: 2px solid rgba(248, 113, 113, 0.3); color: var(--danger); margin-bottom: 1.5rem; animation: pulse-red 2s infinite;">
+                <svg style="width: 40px; height: 40px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9"/></svg>
+            </div>
+            <h2 style="color: var(--text-main); font-size: 1.5rem; margin-bottom: 0.5rem; font-weight: 700;">Systemet är avstängt</h2>
+            <p style="color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1.5rem;">LocalLedger-servern har stängts ner på ett säkert sätt. Du kan stänga detta fönster nu.</p>
+            <span style="font-size: 0.75rem; color: var(--text-muted); opacity: 0.6; display: block; border-top: 1px solid var(--border); padding-top: 1rem;">Alla WORM-verifikationer är säkrade på disk.</span>
+        </div>
+    </div>
+    
+    <!-- Heartbeat Watchdog Ping -->
+    <script>
+        window.pingInterval = null;
+        function startPing() {
+            clearInterval(window.pingInterval);
+            window.pingInterval = setInterval(() => {
+                fetch('/api/ping').catch(() => {});
+            }, 3000);
+        }
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                fetch('/api/ping').catch(() => {});
+                startPing();
+            }
+        });
+        window.addEventListener('beforeunload', () => {
+            navigator.sendBeacon('/api/ping');
+        });
+        startPing();
+    </script>
 </body>
 </html>
 

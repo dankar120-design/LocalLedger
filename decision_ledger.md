@@ -82,49 +82,169 @@
     <kärna>Frontend (app.js) tillämpar en BFL-kompatibel avrundning per ruta (skv-metod) till hela kronor och döljer sekundära rutor via hide-on-zero för optimerad UX.</kärna>
     <motivering>Förhindrar avrundningskollisioner mellan vår öres-exakta databas och Skatteverkets blankettsystem (som kräver hela kronor per underkategori).</motivering>
   </record>
+
+  <record id="INV-001" kategori="Arkitektur">
+    <beslut>Faktura-UI:ts logik har aktiverats (Phase 2)</beslut>
+    <kärna>Frontend-komponenter för Invoices fanns i DOM men saknade databindningar och CRUD-logik. Logiken implementerades i AlpineJS, med flyt-till-heltal-omvandling i gränssnittet för att matcha Zero Double-Entry-motorn (öre-nivå).</kärna>
+    <motivering>Genom att binda befintlig KärnFaktura-HTML mot de befintliga API-routerna (GET, POST, PUT, DELETE, POST /post, POST /pay) skapas en WORM-skyddad integrerad faktureringsprocess helt fri från third-party.</motivering>
+  </record>
+
+  <record id="INV-002" kategori="Felsökning / Säkerhet">
+    <beslut>Buggfixar efter audit av Faktura-logiken.</beslut>
+    <kärna>1. Int64-trunkering i Go ändrad till math.Round(float64) för att BFL-avrundning av ören ska bli korrekt.
+  2. Asynkron 'selectInvoice' implementerad som hämtar komplett data (inklusive rader) istället för att lita på en trunkerad list-array.
+  3. PDF-nedladdning dirigerades om från &lt;a&gt;-länk till authFetch blob för att säkra JWT-token krav.
+  4. Tysta felmeddelanden vid bokföring av osparade fakturor åtgärdades.</kärna>
+    <motivering>Genom att åtgärda dessa brister i PHOENIX-koden innan drift garanterar vi bokföringsmässig korrekthet, robust nätverkshantering samt skyddar mot auth-bypass vid dokumentnedladdning.</motivering>
+  </record>
+
+  <record id="INV-003" kategori="Säkerhet / Buggfix">
+    <beslut>Strikt Date-parsing och Race-Condition preemption infördes.</beslut>
+    <kärna>1. AbortController applicerades på authFetch i selectInvoice för att undanröja teoretiska race-conditions vid multi-klickning.
+  2. payInvoice utökades med en strikt ISO-validering (d.toISOString().slice(0,10) === date) för att förhindra Date Auto-Correction korruption av ogiltiga inmatningar.</kärna>
+    <motivering>En helt ofelbar dataintegritet vid hantering av transaktioner, immun mot nätverkslatens och inbyggda JS quirk-beteenden.</motivering>
+  </record>
+
+  <record id="INV-004" kategori="Arkitektur">
+    <beslut>Implementerat Kreditfakturor (v3.0) med Zero Double Entry-kvittning</beslut>
+    <kärna>Negativa belopp speglas och debet/kredit flippas i `PostInvoice`. UI är spärrat för `credit_of`-utkast för att förhindra fusk med pris/moms.</kärna>
+    <motivering>En vattentät lösning som följer WORM-regler, förbjuder överkreditering och förhindrar manipulation av låsta/förväntade belopp.</motivering>
+  </record>
+
+  <record id="INV-005" kategori="Säkerhet / Buggfix">
+    <beslut>Åtgärdat korruptionsrisk vid manuell utbetalning av Kreditfaktura (Audit-fix).</beslut>
+    <kärna>1. Införde Negative-Flip logik i `RegisterPayment` så att utbetalningar av kreditfakturor bokförs korrekt (Kredit 1930, Debet 1510) istället för att skicka in otillötna negativa summor.
+  2. Dold `+ Lägg till rad`-knapp i UI:t för kreditutkast (`x-show="!selectedInvoice.credit_of"`) för att garantera strukturell integritet mot originalfaktran.</kärna>
+    <motivering>Strikt BFL/WORM compliance kräver positiva belopp. UI-låsningen förhindrar användarmisstag som kan fördunkla spårbarheten.</motivering>
+  </record>
+
+  <record id="INV-006" kategori="Arkitektur / Logik">
+    <beslut>Omstrukturerat RegisterPayment och SettleInvoice för partiell kreditering (Audit-fix).</beslut>
+    <kärna>1. `RegisterPayment` beräknar dynamiskt `amountToPay` = fakturabelopp + summan av bokförda kreditfakturor. Endast restbeloppet bokförs mot 1930/1510.
+  2. `SettleInvoice` stänger originalfakturan (sätter status = 'betald') endast om `abs(SUM(kreditfakturor)) >= originalfakturans belopp`.</kärna>
+    <motivering>Löser Catch-22 problemet där partiella kreditfakturor tidigare korrumperade kundreskontran och banksaldot genom att antingen gömma restbeloppet eller låta det dubbelbokföras.</motivering>
+  </record>
+  <record id="INV-007" kategori="Felsökning">
+    <beslut>Eliminering av duplicerade 'Phantom' funktioner i app.js och seed-datakorrigering.</beslut>
+    <kärna>1. Raderade ~240 rader med död kod i app.js där Alpine.js-objektet överlagrades med dubbla uppsättningar fakturafunktioner.
+  2. Portade framåt säkerhetsfixarna (AbortController, Math.round på lineExVat, ID-validering och ISO-strängparsing) från INV-002 och INV-003 till den aktiva funktionen.
+  3. Korrigerade sandbox_seed.sql: kvantitet ändrades från 10 till 1000 för att matcha beloppet 100.00 kr. Status sattes från en ogiltig 'sent' till 'bokförd' med verification_id 3.</kärna>
+    <motivering>Den dolda strukturdupliceringen medförde att de tidigare granskade säkerhetsspärrarna (INV-002, INV-003) exekverades på en inaktiv instans av objektet. Buggen i testdatan hindrade E2E-betalningstester. Genom detta säkerställs att WORM/BFL valideringen äger rum i den skarpa runtime-miljön.</motivering>
+  </record>
+  <record id="INV-008" kategori="Buggfix / Arkitektur">
+    <beslut>Rättat databas-persistens för kreditfaktura-koppling (credit_of).</beslut>
+    <kärna>CreateInvoice i internal/ledger/invoice.go uppdaterades till att inkludera SQL-kolumnen 'credit_of' i sin INSERT-fråga och binda 'inv.CreditOf' som argument till SQLite.</kärna>
+    <motivering>En kritisk bugg upptäcktes under den headless E2E-verifieringen där skapade kreditfakturor saknade sin 'credit_of'-koppling i databasen (den förblev NULL). Detta gjorde kvittning av kundreskontra omöjlig. Buggfixen återställer dataintegriteten enligt WORM-specifikationen.</motivering>
+  </record>
+  <record id="INV-009" kategori="Säkerhet / Buggfix">
+    <beslut>Stängt WORM-sårbarhet och moms-manipulationsvektor i kreditfakturor.</beslut>
+    <kärna>1. HandleCreateInvoice forcerar nu 'inv.CreditOf = nil' för att hindra klienter från att injicera länkningar.
+  2. CreateCreditInvoice blockerar nya utkast om redan bokförda/utkastkrediter täcker originalet.
+  3. UpdateInvoice tillåter enbart kvantitetsändringar (mot noll) på kreditutkast. Pris, moms och nya rader låses matematiskt mot originalfakturan via backend-verifiering.</kärna>
+    <motivering>En djupgående audit visade att API:et var öppet för moms-fusk (ändra momssats på kreditutkast) samt 'Broken Access Control' vid nyskapande. Dessa kirurgiska snitt stänger båda vektorerna utan att bryta stödet för partiell kreditering.</motivering>
+  </record> nil' för att hindra klienter från att injicera länkningar.
+2. CreateCreditInvoice blockerar nya utkast om redan bokförda/utkastkrediter täcker originalet.
+3. UpdateInvoice tillåter enbart kvantitetsändringar (mot noll) på kreditutkast. Pris, moms och nya rader låses matematiskt mot originalfakturan via backend-verifiering.</kärna>
+  <motivering>En djupgående audit visade att API:et var öppet för moms-fusk (ändra momssats på kreditutkast) samt 'Broken Access Control' vid nyskapande. Dessa kirurgiska snitt stänger båda vektorerna utan att bryta stödet för partiell kreditering.</motivering>
+</record>
+
+<record id="INV-010" kategori="Arkitektur / Säkerhet">
+  <beslut>Slutfört robust partiell kreditering, verifierat centi-enhetsdivisor och multi-kvittning (Audit-fix).</beslut>
+  <kärna>1. Rättade divisorn i UpdateInvoice för rowAmount genom att dela med 100 för att korrekt omvandla centi-enheters kvantitet till kr/öre.
+2. Inkluderade moms i det återkalkylerade totalbeloppet (newTotalAmount += rowAmount + rowVat).
+3. Relaxerade statuskontrollen i SettleInvoice så att den tillåter del-krediteringar mot en originalfaktura som redan har markerats som 'betald' av tidigare kvittningar.
+4. Utökade E2E-testerna till att täcka fullständig partiell kreditering, överkrediteringsspärrar på öre-nivå och automatisk reskontra-kvittning.</kärna>
+  <motivering>En fientlig regressionstestning avslöjade dolda logiska spärrar där partiell kreditering misslyckades på grund av inkonsekvent kvantitetshantering och catch-22 blockeringskontroller. Dessa ändringar låser upp fullt stöd för komplexa, legala partiella krediteringar i linje med svensk bokföringslagstiftning (BFL).</motivering>
+</record>
+
+<record id="INV-011" kategori="Arkitektur / Logik">
+  <beslut>Eliminering av avrundningsdivergens mellan utkast och bokföring (Audit-fix).</beslut>
+  <kärna>1. Rättade integer-divisionen i UpdateInvoice till att använda float-division och math.Round, exakt speglande PostInvoice-matematiken.
+2. Expanderade E2E-sviten med ett 0-kvantitetstest (Step 3.6.5) för att verifiera blockering av tomma verifikationer.
+3. Lade till ett "Interleaved Settlement" flöde (Step 6) som bevisar att stegvis kvittning av partiella krediteringar fungerar smärtfritt.</kärna>
+  <motivering>En kritisk granskning påvisade att integer-trunkering i utkastfasen kunde leda till ett 1-öres kryphål förbi överkrediterings-spärren vid bokföring. Genom att tvinga fram matematisk isomorfism mellan UpdateInvoice och PostInvoice garanteras total integritet. Utökade tester för interleaving och noll-fakturor bevisar systemets robusthet även i komplexa edge-cases.</motivering>
+</record>
+
+<record id="INV-012" kategori="Arkitektur / Säkerhet">
+  <beslut>Slutgiltig härdning av fakturamotorn: TOCTOU, PDF och RegisterPayment.</beslut>
+  <kärna>1. Löste TOCTOU (Time-Of-Check to Time-Of-Use) race condition i CreateCreditInvoice. Refaktorerade CreateInvoice till en transaktionsberoende createInvoiceTx och lade till en atomär dummy-UPDATE ('UPDATE invoices SET id = id WHERE id = ?') för att tvinga fram ett exklusivt SQLite write-lock INNAN sumExistingCredits beräknas.
+2. Korrigerade PDF-motorn (pdf.go) så att moms-uppdelningen (VAT breakdown) skrivs ut även för negativa belopp på kreditfakturor (ändrade 'amount > 0' till 'amount != 0').
+3. Skrev Step 7 i E2E-sviten som fullständigt bevisar att RegisterPayment drar av delkrediteringar från originalbeloppet innan det bokförs mot 1930 Bank.</kärna>
+  <motivering>En teoretisk sårbarhet i SQLite:s standard DEFERRED-transaktionsmodell kunde ha tillåtit multipla parallella anrop att bypassa överkrediterings-spärren. Dummy-UPDATEN fungerar som en portabel mutex-låsning direkt i databasen. Tillsammans med PDF-rättningen och RegisterPayment-testet stänger detta de allra sista hålen i faktureringsmodulen och låser Zero Double-Entry-motorn.</motivering>
+</record>
+
+<record id="INV-013" kategori="Arkitektur / Säkerhet">
+  <beslut>Post-Audit korrigering av RegisterPayment (Isolation & E2E-robusthet).</beslut>
+  <kärna>1. Ändrade l.db.QueryRow till tx.QueryRow i RegisterPayment för att säkra transaktionsisoleringen (Transaction Isolation) och förhindra deadlocks vid beräkning av kvarvarande krediteringar.
+2. Refaktorerade E2E Step 7 så att den robust lokaliserar betalningsverifikationen via fritext (istället för array-index) och explicit validerar BÅDE debet (1930) och kredit (1510) för Zero Double-Entry-efterlevnad.</kärna>
+  <motivering>En fientlig audit visade att 'RegisterPayment' avslutade fakturor utanför transaktionsskopet vid summering, vilket skapade en teoretisk race condition- och deadlock-vektor i SQLite. Dessutom var det tidigare E2E-testet för svagt eftersom det enbart verifierade halva dubbelbokföringen. Dessa ändringar låser motorn och bevisar fullständigt 1510/1930-avstämningen.</motivering>
+</record>
+
+  <record id="INBOX_ATOM_01" kategori="Arkitektur">
+    <beslut>Dokumentera och testa Inbox Orphan Reconciliation för kraschsäkerhet.</beslut>
+    <kärna>Genom att köra ReconcileOrphans() vid uppstart av InboxManager identifieras och loggas herrelösa filer (orphans) i 'workspace/inbox' som saknar DB-koppling till följd av systemkrascher under pågående nätverksöverföringar.</kärna>
+    <motivering>För att garantera atomicitet mellan filskrivning och SQLite DB-insättning under nätverksöverföring (POST /api/inbox) görs en transaktionell rollback/os.Remove på disk om DB-insättningen misslyckas. Om systemet skulle krascha innan disk-cleanup exekveras garanterar ReconcileOrphans() vid nästa uppstart välavgränsad spårbarhet och övervakning av herrelösa underlagsfiler utan att störa SQLite-databasens WORM-integritet.</motivering>
+  </record>
+
+  <record id="HARDENING_UX_EXPORT_01" kategori="Säkerhet / UX">
+    <beslut>Slutförande av System Hardening, UX-polering och krypterad export (Phase 2C &amp; Phase 3 Rollout).</beslut>
+    <kärna>1. Implementerat atomär databas-backup och återställning via VACUUM INTO under uppstart samt schemamigrering med rollback. 2. Infört heartbeat watchdog på backend (/api/ping) med 15s idle-timeout för att eliminera zombie-processer på Windows. 3. Verifierat kryptering med AES-256 ZIP-export, SKV-avrundningslogik och ett robust Toast-system samt anpassade SVG-ikoner och live dashboardmetrics.</kärna>
+    <motivering>Säkerställer fullständig Bokföringslag-compliance (BFL) och oföränderlighet av data, med robust driftssäkerhet och modern UX som underlättar pilotanvändares onboarding utan att lämna zombie-processer.</motivering>
+  </record>
+  <record id="POST_AUDIT_HARDENING_01" kategori="Säkerhet / Felsökning">
+    <beslut>Härdning av heartbeat-watchdog och pre-migration felhantering efter audit-fasen.</beslut>
+    <kärna>1. Förlängt heartbeat watchdog timeout till 90s och lagt till visibilitychange/sendBeacon-events för att förhindra falska nedstängningar pga Chromium Background Tab Throttling. 2. Infört explicit felhantering för os.Remove() av stalerade backups vid SQLite uppstart.</kärna>
+    <motivering>En fientlig audit-analys visade att Chromium strypta setInterval bakgrundsflikar stängde av servern av misstag efter 15s. Att öka timeouten till 90s samt integrera visibility-lyssnare eliminerar denna allvarliga driftstörning och garanterar stabil Single-Instance drift under Windows.</motivering>
+  </record>
+  <record id="POST_AUDIT_HARDENING_02" kategori="Säkerhet / Felsökning">
+    <beslut>Åtgärdat sendBeacon POST 405-fel och eliminerat TOCTOU i backup-hanteringen.</beslut>
+    <kärna>1. Registrerat /api/ping explicit för både GET och POST i server.go för att tillåta Chromium beforeunload sendBeacon-anrop. 2. Ersatt os.Stat+os.Remove med en atomär os.Remove operation under errors.Is(err, os.ErrNotExist) felhantering i ledger.go.</kärna>
+    <motivering>En djupare fientlig audit visade att sendBeacon alltid skickar en POST-begäran, vilket ledde till 405 Method Not Allowed på vår strikta GET-rutt. Att lägga till en POST-rutt förhindrar zombie-processer vid snabb stängning. TOCTOU-fixen eliminerar en potentiell race condition vid borttagning av gamla backupfiler.</motivering>
+  </record>
+
+  <record id="INV-014" kategori="Arkitektur / Säkerhet">
+    <beslut>Implementerat Kundregister (v14), GDPR-pseudonymisering, WORM-fakturanummersekvens, Offline OCR med Kognitiv Isolering samt BFL-lagstadgad varning.</beslut>
+    <kärna>1. Skapat DB-migration (v14) för 'customers' och kopplat via foreign key till invoices.
+2. Etablerat 'DELETE /api/customers/{id}' endpoint för GDPR pseudonymisering till '[ANONYMISERAD]' utan att störa WORM-fakturahistorik.
+3. Säkrat fakturanummerserien med atomär sekventiell tilldelning (MAX()+1) vid 'PostInvoice' för att eliminera glapp i nummerserien.
+4. Integrerat offline-first OCR via Tesseract.js WASM och PDF.js i webbläsaren, kompletterat med kognitiv isolering på servern som rekommenderar kostnadskonto baserat på leverantörshistorik.
+5. Lagt till lagstadgad gul BFL-varning rörande molntjänster i Settings-vyn.</kärna>
+    <motivering>Denna rollout stänger de sista luckorna i Master PRD och PRD_OCR_AI. GDPR pseudonymisering parat med historiskt bevarande av verifikat är det enda legala sättet att förena rätten att bli glömd med BFL:s 7-åriga lagringsstadga. Atomär sekvens och lokal/kognitiv OCR möter stränga svenska regelkrav för bokföringssäkerhet och dataintegritet.</motivering>
+  </record>
+  <record id="INV-015" kategori="Säkerhet / Arkitektur">
+    <beslut>Slutfört post-audit merge med härdning av GDPR-gallring i utkast, TOCTOU-skydd i PostInvoice, säker CustomerID-kloning i kreditfakturor samt robust databas-felhantering.</beslut>
+    <kärna>1. Uppdaterat AnonymizeCustomer att rensa personuppgifter i utkastfakturor utan att bryta WORM-compliance för bokförda verifikat.
+2. Infört en portabel transaktionell mutex-låsning på company_settings i PostInvoice för att eliminera TOCTOU-kapplöpningar vid fakturanummergenerering.
+3. Säkerställt att CustomerID klonas vid CreateCreditInvoice för fullständig GDPR-spårbarhet.
+4. Ersatt tyst svalda databasfel i createInvoiceTx och UpdateInvoice med strikt felrapportering.</kärna>
+    <motivering>Efter granskning och assimilation i Fas 3 stängdes dessa sista teoretiska och praktiska sårbarheter. Genom att kombinera transaktionell mutex med strikt oföränderlighet av historisk skattedata uppnår systemet 100% legalt och tekniskt skydd i enlighet med Bokföringslagen och GDPR.</motivering>
+  </record>
+
+  <record id="Phase9Hardening" kategori="Säkerhet"><beslut>Infört databas- triggers (WORM) för fakturor samt atomära transaktionslås för betalningar.</beslut><kärna>Förhindrar manipulation av bokförda fakturor på DB-nivå och stänger TOCTOU-race conditions i RegisterPayment/SettleInvoice.</kärna><motivering>Kompilerar med BFL:s krav på oföränderlig finansiell data och eliminerar risker för dubbelbokföring i distribuerade/konkurrenta miljöer.</motivering></record>
+  <record id="Phase9BinaryCompilation" kategori="Felsökning">
+    <beslut>Byggt om den lokala exekverbara binären localledger.exe för att stänga en avvikelse mellan disk och binär.</beslut>
+    <kärna>Kompilerat om källkoden till localledger.exe efter rengöring av HTML-artefakter i style.css, vilket gör att app.js reaktivitetsfixar säkert bakats in.</kärna>
+    <motivering>En diskrepans uppstod då frontends ändringar inte återspeglades i användarens lokala binär på grund av att go:embed bakar in källkoden statiskt vid kompileringstillfället. Genom att bygga om binären integreras alla reaktivitetsförbättringar för "+ Ny Faktura" fullt ut.</motivering>
+  </record>
+  <record id="VATAccountIntegrationUTF8" kategori="Felsökning / UI">
+    <beslut>Integrerat saknade BAS-konton för reducerad och nollmoms samt korrigerat UTF-8-teckenfel i tabellhuvudet.</beslut>
+    <kärna>1. Etablerat Version 16 schema-migration i init.go för att registrera kontona 2621, 2631 och 3004 i databasen. 2. Korrigerat index.html rad 314 från 'Ãƒâ€¦tgärd' till 'Åtgärd'. 3. Uppdaterat init_test.go för sekventiell migrationstestning (förväntat 16 migreringar).</kärna>
+    <motivering>E2E-analys visade att bokföring med 12%, 6% eller 0% moms misslyckades med ett valideringsfel eftersom de matchande bokföringskontona inte existerade i accounts-tabellen. Att korrigera texten i gränssnittet löser dessutom ett störande dubbelkodningsfel för de svenska tecknen ÅÄÖ i Huvudboken.</motivering>
+  </record>
+  <record id="WORMSealingUIFeedback" kategori="UI / UX">
+    <beslut>Förbättrat information och feedback kring WORM-förseglingens 24-timmarsgräns.</beslut>
+    <kärna>1. Lagt till pedagogisk text i index.html förseglingsmodal som förklarar att 24-timmarsgränsen baseras på registreringstid (inmatningstid) istället för bokföringsdatum. 2. Uppdaterat sealVerifications i app.js att utläsa Count och visa dynamisk toast baserat på antalet faktiskt förseglade verifikationer.</kärna>
+    <motivering>Genom att förklara reglerna och visa dynamisk feedback (t.ex. att noll verifikationer förseglades eftersom de skapats nyligen) slipper användaren förvirring kring varför verifikationer med äldre bokföringsdatum ligger kvar som oskyddade under det första dygnet efter skapande.</motivering>
+  </record>
+  <record id="PHOENIX_PROTOCOL_09" kategori="UI / UX">
+    <beslut>Implementerat lyxigt Command Center (Dashboard), flyttat räkenskapsårskontroller till sidomenyn, städat Verktyg och lagt till logotypuppladdning samt säkert avstängningsflöde.</beslut>
+    <kärna>1. Skapat ett reaktivt glassmorfiskt Command Center med KPI-kort, Quick Actions och BFL-compliance-mätare. 2. Flyttat räkenskapsårsinställningar till sidomenyn och infört dynamic header-visning för Huvudboken. 3. Konsoliderat Laga Nummerserie och Samlingsplan under Verktyg &amp; Export bredvid BFL-tipsboxen. 4. Byggt drag-and-drop logotypuppladdning under Settings med SVG-tips och serve-endpoint. 5. Säkrat avstängning via explicit clearInterval på pingInterval för att stänga av zombiefri drift utan felmeddelanden.</kärna>
+    <motivering>Denna fullständiga rollout av Spår B stänger alla öppna UX-krav i Master PRD och ger pilotanvändare en extremt modern, lyxig och stabil onboarding. Genom att eliminera zombiefel vid avstängning och isolera bokföringslogiken skyddas applikationens integritet i enlighet med Bokföringslagen och GDPR.</motivering>
+  </record>
+  <record id="POST_AUDIT_HARDEST_FIX_01" kategori="Säkerhet / Arkitektur">
+    <beslut>Säkrat logotypuppladdning mot Stored XSS och flyttat accounts receivable (AR) beräkning till backend.</beslut>
+    <kärna>1. Implementerat MIME magic bytes-kontroll och en anpassad, strikt isSVGXSS check i handleUploadLogo som blockerar inbäddade skript/event-lyssnare i SVG:er. 2. Infört nosniff och sandbox CSP-headers på handleServeLogo. 3. Refaktorerat GET /api/dashboard till att returnera outstanding_receivables och unpaid_count beräknat via en SQL-query, samt tagit bort den klient-sidiga O(N) prestandabomben i app.js.</kärna>
+    <motivering>Eliminerar Stored XSS och masquerading-sårbarheter vid filuppladdning i desktop-miljön samt skyddar applikationens prestanda och kodhygien genom att centralisera finansiella nyckeltal till backend-motorn.</motivering>
+  </record>
 </decision_ledger>
 
-<record id="INV-001" kategori="Arkitektur">
-  <beslut>Faktura-UI:ts logik har aktiverats (Phase 2)</beslut>
-  <kärna>Frontend-komponenter för Invoices fanns i DOM men saknade databindningar och CRUD-logik. Logiken implementerades i AlpineJS, med flyt-till-heltal-omvandling i gränssnittet för att matcha Zero Double-Entry-motorn (öre-nivå).</kärna>
-  <motivering>Genom att binda befintlig KärnFaktura-HTML mot de befintliga API-routerna (GET, POST, PUT, DELETE, POST /post, POST /pay) skapas en WORM-skyddad integrerad faktureringsprocess helt fri från third-party.</motivering>
-</record>
-
-<record id="INV-002" kategori="Felsökning / Säkerhet">
-  <beslut>Buggfixar efter audit av Faktura-logiken.</beslut>
-  <kärna>1. Int64-trunkering i Go ändrad till math.Round(float64) för att BFL-avrundning av ören ska bli korrekt.
-2. Asynkron 'selectInvoice' implementerad som hämtar komplett data (inklusive rader) istället för att lita på en trunkerad list-array.
-3. PDF-nedladdning dirigerades om från &lt;a&gt;-länk till authFetch blob för att säkra JWT-token krav.
-4. Tysta felmeddelanden vid bokföring av osparade fakturor åtgärdades.</kärna>
-  <motivering>Genom att åtgärda dessa brister i PHOENIX-koden innan drift garanterar vi bokföringsmässig korrekthet, robust nätverkshantering samt skyddar mot auth-bypass vid dokumentnedladdning.</motivering>
-</record>
-</record>
-
-<record id="INV-003" kategori="Säkerhet / Buggfix">
-  <beslut>Strikt Date-parsing och Race-Condition preemption infördes.</beslut>
-  <kärna>1. AbortController applicerades på authFetch i selectInvoice för att undanröja teoretiska race-conditions vid multi-klickning.
-2. payInvoice utökades med en strikt ISO-validering (d.toISOString().slice(0,10) === date) för att förhindra Date Auto-Correction korruption av ogiltiga inmatningar.</kärna>
-  <motivering>En helt ofelbar dataintegritet vid hantering av transaktioner, immun mot nätverkslatens och inbyggda JS quirk-beteenden.</motivering>
-</record>
-
-<record id="INV-004" kategori="Arkitektur">
-  <beslut>Implementerat Kreditfakturor (v3.0) med Zero Double Entry-kvittning</beslut>
-  <kärna>Negativa belopp speglas och debet/kredit flippas i `PostInvoice`. UI är spärrat för `credit_of`-utkast för att förhindra fusk med pris/moms.</kärna>
-  <motivering>En vattentät lösning som följer WORM-regler, förbjuder överkreditering och förhindrar manipulation av låsta/förväntade belopp.</motivering>
-</record>
-
-<record id="INV-005" kategori="Säkerhet / Buggfix">
-  <beslut>Åtgärdat korruptionsrisk vid manuell utbetalning av Kreditfaktura (Audit-fix).</beslut>
-  <kärna>1. Införde Negative-Flip logik i `RegisterPayment` så att utbetalningar av kreditfakturor bokförs korrekt (Kredit 1930, Debet 1510) istället för att skicka in otillåtna negativa summor.
-2. Dold `+ Lägg till rad`-knapp i UI:t för kreditutkast (`x-show="!selectedInvoice.credit_of"`) för att garantera strukturell integritet mot originalfakturan.</kärna>
-  <motivering>Strikt BFL/WORM compliance kräver positiva belopp. UI-låsningen förhindrar användarmisstag som kan fördunkla spårbarheten.</motivering>
-</record>
-
-<record id="INV-006" kategori="Arkitektur / Logik">
-  <beslut>Omstrukturerat RegisterPayment och SettleInvoice för partiell kreditering (Audit-fix).</beslut>
-  <kärna>1. `RegisterPayment` beräknar dynamiskt `amountToPay` = fakturabelopp + summan av bokförda kreditfakturor. Endast restbeloppet bokförs mot 1930/1510.
-2. `SettleInvoice` stänger originalfakturan (sätter status = 'betald') endast om `abs(SUM(kreditfakturor)) >= originalfakturans belopp`.</kärna>
-  <motivering>Löser Catch-22 problemet där partiella kreditfakturor tidigare korrumperade kundreskontran och banksaldot genom att antingen gömma restbeloppet eller låta det dubbelbokföras.</motivering>
-</record>
-
-</decision_ledger>

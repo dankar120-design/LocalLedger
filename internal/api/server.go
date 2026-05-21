@@ -32,6 +32,10 @@ type Server struct {
 	isSandbox    bool
 	shutdownChan chan struct{}
 	shutdownOnce sync.Once
+	
+	// Heartbeat watchdog
+	lastPing     time.Time
+	pingMu       sync.Mutex
 }
 
 // GenerateToken skapar en slumpmässig 32-byte hex sträng.
@@ -84,12 +88,15 @@ func Start(workspace string, port int, isE2E bool, isSandbox bool) (*Server, err
 		indexTmpl:    indexTmpl,
 		isSandbox:    isSandbox,
 		shutdownChan: make(chan struct{}),
+		lastPing:     time.Now(),
 	}
 
 	// 3. Sätt upp routes (Go 1.22+ ServeMux)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", s.handleHealth)
 	mux.HandleFunc("POST /api/shutdown", s.handleShutdown)
+	mux.HandleFunc("GET /api/ping", s.handlePing)
+	mux.HandleFunc("POST /api/ping", s.handlePing)
 	s.registerRoutes(mux)
 
 	// Frontend routes
@@ -125,6 +132,30 @@ func Start(workspace string, port int, isE2E bool, isSandbox bool) (*Server, err
 		}
 	}()
 
+	// 7. Starta heartbeat watchdog för att förhindra zombie-processer
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				s.pingMu.Lock()
+				idleTime := time.Since(s.lastPing)
+				s.pingMu.Unlock()
+				
+				if idleTime > 90*time.Second {
+					log.Printf("[Watchdog] No heartbeat received for %v. Initiating auto-shutdown...", idleTime)
+					s.shutdownOnce.Do(func() {
+						close(s.shutdownChan)
+					})
+					return
+				}
+			case <-s.shutdownChan:
+				return
+			}
+		}
+	}()
+
 	return s, nil
 }
 
@@ -156,8 +187,13 @@ func (s *Server) Token() string {
 // authMiddleware kräver 'Authorization: Bearer <token>' för alla /api/-anrop.
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Vi vill skydda allt under /api/ utom /api/attachments/, /api/reports/samlingsplan och /api/reports/excel
-		if strings.HasPrefix(r.URL.Path, "/api/") && !strings.HasPrefix(r.URL.Path, "/api/attachments/") && !strings.HasPrefix(r.URL.Path, "/api/reports/samlingsplan") && !strings.HasPrefix(r.URL.Path, "/api/reports/excel") {
+		// Vi vill skydda allt under /api/ utom /api/attachments/, /api/reports/samlingsplan, /api/reports/excel och logotypen
+		if strings.HasPrefix(r.URL.Path, "/api/") && 
+			!strings.HasPrefix(r.URL.Path, "/api/attachments/") && 
+			!strings.HasPrefix(r.URL.Path, "/api/reports/samlingsplan") && 
+			!strings.HasPrefix(r.URL.Path, "/api/reports/excel") &&
+			r.URL.Path != "/api/ping" &&
+			!(r.Method == "GET" && r.URL.Path == "/api/settings/logo") {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 				http.Error(w, "Unauthorized: Missing Bearer Token", http.StatusUnauthorized)
@@ -249,6 +285,17 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(status)
+}
+
+// handlePing hanterar keep-alive pings från frontenden.
+func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {
+	s.pingMu.Lock()
+	s.lastPing = time.Now()
+	s.pingMu.Unlock()
+	
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"pong"}`))
 }
 
 

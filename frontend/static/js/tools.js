@@ -116,29 +116,8 @@ document.addEventListener('alpine:init', () => {
         },
 
         // --- DATABAS BACKUP ---
-        async exportBackup() {
-            this.isExportingBackup = true;
-            try {
-                const res = await this.authFetch('/api/export/backup');
-                if (!res.ok) {
-                    this.showToast('Misslyckades att exportera backup', 'error');
-                    return;
-                }
-                const blob = await res.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `localledger_backup.db`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                window.URL.revokeObjectURL(url);
-            } catch (e) {
-                this.showToast('Nätverksfel vid export', 'error');
-            } finally {
-                this.isExportingBackup = false;
-            }
-        },
+        // Konsoliderad: använder nu globala ledgerApp-metoder i app.js
+
 
         // --- ÅRSAVSLUT (IB) ---
 
@@ -222,46 +201,8 @@ document.addEventListener('alpine:init', () => {
         },
 
         // --- BACKUP RESTORE ---
-        handleBackupSelected(e) {
-            const files = e.target.files;
-            if (files && files.length > 0) {
-                this.selectedBackupFile = files[0];
-            }
-        },
+        // Konsoliderad: använder nu globala ledgerApp-metoder i app.js
 
-        async uploadBackupFile() {
-            if (!this.selectedBackupFile) return;
-
-            if (!confirm(`EXTREM FARA: Du är på väg att skriva över HELA databasen med '${this.selectedBackupFile.name}'.\n\nAll nuvarande data kommer att raderas.\n\nÄR DU HELT SÄKER?`)) {
-                return;
-            }
-
-            this.isUploadingBackup = true;
-            const formData = new FormData();
-            formData.append('database', this.selectedBackupFile);
-
-            try {
-                const res = await this.authFetch('/api/import/backup', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (res.ok) {
-                    alert('Databasen har återställts framgångsrikt!\n\nSystemet måste startas om eller sidan måste laddas om för att ändringarna ska slå igenom.');
-                    // Tvinga hard reload för att återställa state
-                    window.location.href = '/'; 
-                } else {
-                    const err = await res.text();
-                    this.showToast(`Återställning misslyckades: ${err}`, 'error');
-                }
-            } catch(e) {
-                this.showToast('Nätverksfel vid återställning', 'error');
-            } finally {
-                this.isUploadingBackup = false;
-                this.selectedBackupFile = null;
-                if (this.$refs.backupFileInput) this.$refs.backupFileInput.value = '';
-            }
-        }
     }));
 });
 

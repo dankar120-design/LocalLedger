@@ -2,6 +2,9 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('ledgerApp', () => ({
         theme: localStorage.getItem('theme') || 'dark',
         token: '',
+        currentView: 'dashboard',
+        logoCacheBuster: Date.now(),
+        showShutdown: false,
         verifications: [],
         searchQuery: '',
         verifyStatus: 'Checking...',
@@ -22,9 +25,18 @@ document.addEventListener('alpine:init', () => {
         financialReport: null,
         invoices: [],
         selectedInvoice: null,
+        customers: [],
+        customersStale: true,
         showSealModal: false,
         showRestoreModal: false,
         restoreComplete: false,
+        showBackupModal: false,
+        backupPassword: '',
+        isExportingBackup: false,
+        restorePasswordRequired: false,
+        restorePassword: '',
+        restoreFileToUpload: null,
+        isRestoring: false,
         showBugLogger: false,
         isSealing: false,
         bugLog: [],
@@ -59,16 +71,16 @@ document.addEventListener('alpine:init', () => {
             });
         },
         
-        showDashboard: false,
+        showDashboard: true,
         isScanningOcr: false,
         ocrStatus: '',
-        dashboard: { income: 0, expenses: 0, net: 0, bank: 0 },
+        dashboard: { income: 0, expenses: 0, net: 0, bank: 0, outstanding_receivables: 0, unpaid_count: 0 },
         vatReport: null,
         vatStartDate: '',
         vatEndDate: '',
         vatPeriodPreset: '',
         basAccounts: [],
-        settings: { name: '', org_number: '', cloud_inbox_path: '' },
+        settings: { name: '', org_number: '', cloud_inbox_path: '', logo_path: '' },
         newAccount: { code: '', name: '', type: 'Kostnad' },
 
         inboxItems: [],
@@ -124,281 +136,18 @@ document.addEventListener('alpine:init', () => {
                 this.showToast('Nätverksfel', 'error');
             }
         },
-        
-        async fetchInvoices() {
-            try {
-                const res = await this.authFetch('/api/invoices');
-                if (res.ok) {
-                    this.invoices = await res.json() || [];
-                }
-            } catch (e) {
-                this.showToast('Fel vid hämtning av fakturor', 'error');
-            }
-        },
-
-        createNewInvoice() {
-            const today = new Date().toISOString().split('T')[0];
-            const dueDate = new Date();
-            dueDate.setDate(dueDate.getDate() + 30);
-            this.selectedInvoice = {
-                id: 0,
-                customer_name: '',
-                customer_orgnr: '',
-                customer_address: '',
-                date: today,
-                due_date: dueDate.toISOString().split('T')[0],
-                payment_terms_days: 30,
-                items: [
-                    { description: '', quantity: 100, price_ex_vat: 0, vat_rate: 25, quantity_float: 1, price_float: 0 }
-                ],
-                total_amount: 0,
-                total_vat: 0,
-                status: 'utkast'
-            };
-        },
-
-        async selectInvoice(inv) {
-            if (this.invoiceAbortController) {
-                this.invoiceAbortController.abort();
-            }
-            this.invoiceAbortController = new AbortController();
-
-            try {
-                // Fetch full invoice with items from backend
-                const res = await this.authFetch(`/api/invoices/${inv.id}`, {
-                    signal: this.invoiceAbortController.signal
-                });
-                if (!res.ok) throw new Error("Kunde inte hämta fakturadetaljer");
-                
-                let clone = await res.json();
-                if (clone.items) {
-                    clone.items.forEach(item => {
-                        item.quantity_float = item.quantity / 100;
-                        item.price_float = item.price_ex_vat / 100;
-                    });
-                } else {
-                    clone.items = [];
-                }
-                this.selectedInvoice = clone;
-            } catch (e) {
-                if (e.name === 'AbortError') return; // Ignore aborted fetches
-                this.showToast('Fel vid hämtning av fakturadetaljer', 'error');
-            }
-        },
-
-        addInvoiceItem() {
-            if (!this.selectedInvoice) return;
-            this.selectedInvoice.items.push({ description: '', quantity: 100, price_ex_vat: 0, vat_rate: 25, quantity_float: 1, price_float: 0 });
-            this.recalcInvoice();
-        },
-
-        removeInvoiceItem(index) {
-            if (!this.selectedInvoice) return;
-            if (this.selectedInvoice.items.length > 1) {
-                this.selectedInvoice.items.splice(index, 1);
-                this.recalcInvoice();
-            }
-        },
-
-        updateInvoiceDueDate() {
-            if (!this.selectedInvoice || !this.selectedInvoice.date) return;
-            const d = new Date(this.selectedInvoice.date);
-            d.setDate(d.getDate() + (this.selectedInvoice.payment_terms_days || 0));
-            this.selectedInvoice.due_date = d.toISOString().split('T')[0];
-        },
-
-        recalcInvoice() {
-            if (!this.selectedInvoice) return;
-            let totalAmount = 0;
-            let totalVat = 0;
-            
-            this.selectedInvoice.items.forEach(item => {
-                // Konvertera float input till backend format
-                item.quantity = Math.round((item.quantity_float || 0) * 100);
-                item.price_ex_vat = Math.round((item.price_float || 0) * 100);
-                
-                let lineExVat = Math.round((item.price_ex_vat * item.quantity) / 100);
-                let lineVat = Math.round((lineExVat * item.vat_rate) / 100);
-                totalAmount += (lineExVat + lineVat);
-                totalVat += lineVat;
-            });
-            
-            this.selectedInvoice.total_amount = totalAmount;
-            this.selectedInvoice.total_vat = totalVat;
-        },
-
-        async saveInvoice() {
-            if (!this.selectedInvoice.customer_name) {
-                this.showToast('Kundnamn saknas', 'error');
-                return;
-            }
-            
-            this.recalcInvoice(); // Säkra konvertering
-            
-            const payload = JSON.parse(JSON.stringify(this.selectedInvoice));
-            
-            const url = payload.id ? `/api/invoices/${payload.id}` : '/api/invoices';
-            const method = payload.id ? 'PUT' : 'POST';
-
-            try {
-                const res = await this.authFetch(url, {
-                    method: method,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (res.ok) {
-                    this.showToast('Utkast sparat', 'success');
-                    if (!payload.id) {
-                        const data = await res.json();
-                        this.selectedInvoice.id = data.id; // Uppdatera med nya ID:t
-                    }
-                    this.fetchInvoices();
-                } else {
-                    const err = await res.text();
-                    this.showToast('Kunde inte spara: ' + err, 'error');
-                }
-            } catch (e) {
-                this.showToast('Nätverksfel', 'error');
-            }
-        },
-
-        async postInvoice() {
-            if (!this.selectedInvoice) return;
-            const id = this.selectedInvoice.id;
-            if (!id || id === 0) {
-                this.showToast('Du måste spara utkastet innan det kan bokföras.', 'error');
-                return;
-            }
-            if (!await this.confirmAction("När du bokför fakturan skapas en låst WORM-verifikation och ett PDF-kvitto. Fakturan kan därefter inte längre ändras.", "Bokför Faktura", "Lås & Bokför", true)) return;
-            try {
-                const res = await this.authFetch(`/api/invoices/${id}/post`, { method: 'POST' });
-                if (res.ok) {
-                    this.showToast('Faktura bokförd!', 'success');
-                    this.fetchInvoices();
-                    this.fetchVerifications();
-                    this.fetchDashboardData();
-                    this.selectedInvoice = null; // Stäng vyn för att force-refresh
-                } else {
-                    this.showToast('Ett fel uppstod: ' + await res.text(), 'error');
-                }
-            } catch (e) {
-                this.showToast('Nätverksfel', 'error');
-            }
-        },
-
-        async payInvoice() {
-            if (!this.selectedInvoice || !this.selectedInvoice.id) return;
-            const id = this.selectedInvoice.id;
-            const today = new Date().toISOString().split('T')[0];
-            const date = prompt("Vänligen ange datum (ÅÅÅÅ-MM-DD) när inbetalningen mottogs på bankkontot (1930):", today);
-            if (!date) return;
-            
-            const d = new Date(date);
-            if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== date) {
-                this.showToast("Ogiltigt datumformat.", 'error');
-                return;
-            }
-
-            try {
-                const res = await this.authFetch(`/api/invoices/${id}/pay`, { 
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ date: date }) 
-                });
-                
-                if (res.ok) {
-                    this.showToast('Betalning registrerad', 'success');
-                    this.fetchInvoices();
-                    this.fetchVerifications();
-                    this.fetchDashboardData();
-                    this.selectedInvoice = null;
-                } else {
-                    this.showToast('Kunde inte registrera: ' + await res.text(), 'error');
-                }
-            } catch (e) {
-                this.showToast('Nätverksfel', 'error');
-            }
-        },
-
-        async creditInvoice(id) {
-            if (!await this.confirmAction("Vill du skapa en kreditfaktura för denna faktura?", "Skapa Kreditfaktura", "Ja, kreditera")) return;
-            try {
-                const res = await this.authFetch(`/api/invoices/${id}/credit`, { method: 'POST' });
-                if (res.ok) {
-                    const data = await res.json();
-                    this.showToast('Kreditfaktura skapad som utkast', 'success');
-                    this.fetchInvoices();
-                    this.selectInvoice({ id: data.id });
-                } else {
-                    this.showToast('Kunde inte kreditera: ' + await res.text(), 'error');
-                }
-            } catch (e) {
-                this.showToast('Nätverksfel', 'error');
-            }
-        },
-
-        async settleInvoice(id) {
-            if (!await this.confirmAction("Vill du kvitta denna kreditfaktura mot originalfakturan? (Inga pengar bokförs över bankkontot)", "Kvitta mot original", "Ja, Kvitta")) return;
-            try {
-                const res = await this.authFetch(`/api/invoices/${id}/settle`, { method: 'POST' });
-                if (res.ok) {
-                    this.showToast('Fakturor kvittade och betalmarkerade', 'success');
-                    this.fetchInvoices();
-                    this.selectedInvoice = null;
-                } else {
-                    this.showToast('Kunde inte kvitta: ' + await res.text(), 'error');
-                }
-            } catch (e) {
-                this.showToast('Nätverksfel', 'error');
-            }
-        },
-        
-        async downloadInvoicePDF(id) {
-            try {
-                const res = await this.authFetch(`/api/invoices/${id}/pdf`);
-                if (!res.ok) throw new Error(await res.text());
-                
-                const blob = await res.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `Faktura_${this.selectedInvoice.invoice_number || 'Utkast'}.pdf`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                window.URL.revokeObjectURL(url);
-            } catch (e) {
-                this.showToast('Kunde inte ladda ner PDF', 'error');
-            }
-        },
-        
-        async deleteInvoice() {
-            if (!this.selectedInvoice) return;
-            const id = this.selectedInvoice.id;
-            if (!id || id === 0) {
-                // If it's unsaved, just close it
-                this.selectedInvoice = null;
-                return;
-            }
-            if (!await this.confirmAction("Vill du radera detta fakturautkast?", "Radera Utkast", "Radera", true)) return;
-            try {
-                const res = await this.authFetch(`/api/invoices/${id}`, { method: 'DELETE' });
-                if (res.ok) {
-                    this.showToast('Utkast raderat', 'success');
-                    this.fetchInvoices();
-                    this.selectedInvoice = null;
-                } else {
-                    this.showToast('Kunde inte radera', 'error');
-                }
-            } catch (e) {
-                this.showToast('Nätverksfel', 'error');
-            }
-        },
 
         templates: [
             {
                 id: 'inkop_25',
+                name: 'Inköp utrustning (25% moms)',
+                desc: 'Inköp förbrukningsinventarier',
+                type: 'expense',
+                vatRate: 0.25,
+                accountTotal: '1930', // Kredit
+                accountVat: '2641',   // Debet
+                accountBase: '5410'   // Debet
+            },
             {
                 id: 'forsaljning_25',
                 name: 'Försäljning tjänst (25% moms)',
@@ -524,6 +273,8 @@ document.addEventListener('alpine:init', () => {
             return this.fiscalYears.find(f => f.id == this.activeFiscalYearId);
         },
 
+
+
         syncFormDateWithFiscalYear() {
             this.formDateError = '';
             const fy = this.activeFiscalYear;
@@ -547,6 +298,15 @@ document.addEventListener('alpine:init', () => {
             
             // Sentinel Principle: Registrera watch innan state uppdateras
             this.$watch('bugLog', val => sessionStorage.setItem('bugLog', JSON.stringify(val)));
+            
+            // Watch activeFiscalYearId to keep dashboard, verifications, and dates in sync
+            this.$watch('activeFiscalYearId', val => {
+                if (val) {
+                    this.fetchDashboardData();
+                    this.fetchVerifications();
+                    this.syncFormDateWithFiscalYear();
+                }
+            });
             
             // Uppdateringen triggar nu sparandet direkt
             this.bugLog = [...stored, ...early];
@@ -575,6 +335,7 @@ document.addEventListener('alpine:init', () => {
             this.runVerification();
             this.fetchInbox();
             this.loadInvoices();
+            this.fetchCustomers();
 
             // Command Palette SPA Routing Hook
             setTimeout(() => {
@@ -614,9 +375,49 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        async selectInvoice(inv) {
+        async fetchCustomers() {
             try {
-                const res = await this.authFetch(`/api/invoices/${inv.id}`);
+                const res = await this.authFetch('/api/customers');
+                if (res.ok) {
+                    this.customers = await res.json();
+                } else {
+                    console.error("Failed to fetch customers", await res.text());
+                }
+            } catch (e) {
+                console.error("Network error fetching customers", e);
+            }
+        },
+
+        async anonymizeCustomer(id) {
+            if (!await this.confirmAction("Vill du anonymisera den här kunden? Detta raderar personuppgifter enligt GDPR men behåller fakturahistoriken intakt.", "Anonymisera", "Ja, anonymisera", true)) return;
+            try {
+                const res = await this.authFetch(`/api/customers/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    this.showToast("Kunden har anonymiserats", "success");
+                    this.customersStale = true;
+                    await this.fetchCustomers();
+                    await this.loadInvoices();
+                } else {
+                    const text = await res.text();
+                    console.error("Failed to anonymize customer", text);
+                    this.showToast("Kunde inte anonymisera kund: " + text, "error");
+                }
+            } catch (e) {
+                console.error("Network error anonymizing customer", e);
+                this.showToast("Nätverksfel vid anonymisering", "error");
+            }
+        },
+
+        async selectInvoice(inv) {
+            if (this.invoiceAbortController) {
+                this.invoiceAbortController.abort();
+            }
+            this.invoiceAbortController = new AbortController();
+
+            try {
+                const res = await this.authFetch(`/api/invoices/${inv.id}`, {
+                    signal: this.invoiceAbortController.signal
+                });
                 if (!res.ok) throw new Error("Kunde inte hämta fakturadetaljer");
                 const fullInv = await res.json();
                 
@@ -631,6 +432,7 @@ document.addEventListener('alpine:init', () => {
                     this.selectedInvoice = fullInv;
                 }
             } catch(e) {
+                if (e.name === 'AbortError') return;
                 console.error(e);
                 this.showToast("Ett fel uppstod vid laddning av fakturan.", "error");
             }
@@ -642,6 +444,7 @@ document.addEventListener('alpine:init', () => {
             dueDate.setDate(dueDate.getDate() + 30);
 
             this.selectedInvoice = {
+                id: 0,
                 customer_name: '',
                 customer_orgnr: '',
                 customer_address: '',
@@ -683,7 +486,7 @@ document.addEventListener('alpine:init', () => {
                 item.quantity = qty;
                 item.price_ex_vat = price;
 
-                const lineExVat = (price * qty) / 100;
+                const lineExVat = Math.round((price * qty) / 100);
                 const lineVat = Math.round((lineExVat * item.vat_rate) / 100);
                 
                 totalExVat += lineExVat;
@@ -693,18 +496,23 @@ document.addEventListener('alpine:init', () => {
             this.selectedInvoice.total_vat = totalVat;
         },
 
-        async saveInvoice() {
+        async saveInvoice(options = { silent: false }) {
+            const silent = options && options.silent === true;
+            if (!this.selectedInvoice.customer_name) {
+                if (!silent) this.showToast('Kundnamn saknas', 'error');
+                return false;
+            }
             this.recalcInvoice();
             try {
                 if (!this.selectedInvoice.date || !this.selectedInvoice.due_date) {
-                    this.showToast("Datum och förfallodatum är obligatoriska", "error");
-                    return;
+                    if (!silent) this.showToast("Datum och förfallodatum är obligatoriska", "error");
+                    return false;
                 }
                 
                 const fy = this.activeFiscalYear;
                 if (fy && (this.selectedInvoice.date < fy.start_date || this.selectedInvoice.date > fy.end_date)) {
-                    this.showToast("Fakturadatum ligger utanför det aktiva räkenskapsåret", "error");
-                    return;
+                    if (!silent) this.showToast("Fakturadatum ligger utanför det aktiva räkenskapsåret", "error");
+                    return false;
                 }
 
                 const isNew = !this.selectedInvoice.id;
@@ -722,23 +530,34 @@ document.addEventListener('alpine:init', () => {
                         const data = await res.json();
                         this.selectedInvoice.id = data.id;
                     }
-                    this.showToast("Fakturan sparades", "success");
-                    await this.loadInvoices();
-                    const updated = this.invoices.find(i => i.id === this.selectedInvoice.id);
-                    if(updated) this.selectInvoice(updated);
+                    this.customersStale = true;
+                    if (!silent) {
+                        this.showToast("Fakturan sparades", "success");
+                        await this.loadInvoices();
+                        const updated = this.invoices.find(i => i.id === this.selectedInvoice.id);
+                        if(updated) this.selectInvoice(updated);
+                    }
+                    return true;
                 } else {
                     const errText = await res.text();
-                    this.showToast("Kunde inte spara fakturan: " + errText, "error");
+                    if (!silent) this.showToast("Kunde inte spara fakturan: " + errText, "error");
+                    return false;
                 }
             } catch(e) {
                 console.error(e);
-                this.showToast("Nätverksfel vid sparande", "error");
+                if (!silent) this.showToast("Nätverksfel vid sparande", "error");
+                return false;
             }
         },
 
         async postInvoice() {
+            if (!this.selectedInvoice) return;
             const proceed = await this.confirmAction("Vill du bokföra fakturan? Detta går inte att ångra och fakturan får sitt officiella fakturanummer.", "Lås Faktura", "Bokför", true);
             if (!proceed) return;
+
+            // Auto-save draft before posting to capture all unsaved changes without flashing toasts or swapping refs.
+            const saved = await this.saveInvoice({ silent: true });
+            if (!saved) return;
             
             try {
                 const res = await this.authFetch(`/api/invoices/${this.selectedInvoice.id}/post`, { method: 'POST' });
@@ -760,6 +579,12 @@ document.addEventListener('alpine:init', () => {
             const dateStr = prompt("Ange datum för inbetalningen (YYYY-MM-DD)", new Date().toISOString().split('T')[0]);
             if (!dateStr) return;
 
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== dateStr) {
+                this.showToast("Ogiltigt datumformat.", 'error');
+                return;
+            }
+
             try {
                 const res = await this.authFetch(`/api/invoices/${this.selectedInvoice.id}/pay`, {
                     method: 'POST',
@@ -780,7 +605,83 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        async creditInvoice(id) {
+            try {
+                const res = await this.authFetch(`/api/invoices/${id}/credit`, {
+                    method: 'POST'
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    this.showToast("Kreditfaktura skapad!", "success");
+                    await this.loadInvoices();
+                    const updated = this.invoices.find(i => i.id === data.id);
+                    if (updated) {
+                        this.selectInvoice(updated);
+                    }
+                } else {
+                    const errText = await res.text();
+                    this.showToast("Fel vid skapande av kreditfaktura: " + errText, "error");
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        },
+
+        async downloadInvoicePDF(id) {
+            try {
+                this.showToast("Genererar PDF...", "info");
+                const res = await this.authFetch(`/api/invoices/${id}/pdf`);
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const urlBlob = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = urlBlob;
+                    a.download = `Faktura_${id}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(urlBlob);
+                    a.remove();
+                    this.showToast("PDF nedladdad!", "success");
+                } else {
+                    const errText = await res.text();
+                    this.showToast("Kunde inte ladda ner PDF: " + errText, "error");
+                }
+            } catch(e) {
+                console.error(e);
+                this.showToast("Nätverksfel vid PDF-nedladdning", "error");
+            }
+        },
+
+        async settleInvoice(id) {
+            const proceed = await this.confirmAction("Vill du kvitta denna kreditfaktura mot originalfakturan?", "Kvitta", "Kvitta", false);
+            if (!proceed) return;
+
+            try {
+                const res = await this.authFetch(`/api/invoices/${id}/settle`, {
+                    method: 'POST'
+                });
+                if (res.ok) {
+                    this.showToast("Kvittning utförd!", "success");
+                    await this.loadInvoices();
+                    const updated = this.invoices.find(i => i.id === id);
+                    if (updated) {
+                        this.selectInvoice(updated);
+                    }
+                } else {
+                    const errText = await res.text();
+                    this.showToast("Fel vid kvittning: " + errText, "error");
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        },
+
         async deleteInvoice() {
+            if (!this.selectedInvoice) return;
+            if (!this.selectedInvoice.id || this.selectedInvoice.id === 0) {
+                this.selectedInvoice = null;
+                return;
+            }
             const proceed = await this.confirmAction("Vill du radera detta utkast?", "Radera", "Radera", true);
             if (!proceed) return;
             try {
@@ -921,19 +822,14 @@ document.addEventListener('alpine:init', () => {
         async shutdownServer() {
             if (!await this.confirmAction("Vill du stänga av LocalLedger?", "Stäng av", "Stäng av", true)) return;
             try {
+                if (window.pingInterval) {
+                    clearInterval(window.pingInterval);
+                }
                 await this.authFetch('/api/shutdown', { method: 'POST' });
-                document.body.innerHTML = `
-                    <div style="display:flex; height:100vh; align-items:center; justify-content:center; background:#0f172a; color:white; font-family:var(--font-sans);">
-                        <div style="text-align:center;">
-                            <h1>System Avstängt</h1>
-                            <p>Du kan nu stänga denna flik.</p>
-                        </div>
-                    </div>
-                `;
-
+                this.showShutdown = true;
             } catch (e) {
                 console.error("Failed to shutdown", e);
-                this.showToast("Kunde inte stänga av servern", "error");
+                this.showShutdown = true; // Ensure glassmorphic overlay is shown even if fetch fails due to sudden server death
             }
         },
 
@@ -1071,6 +967,52 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        async uploadLogo(event) {
+            let file;
+            if (event.dataTransfer && event.dataTransfer.files) {
+                file = event.dataTransfer.files[0];
+            } else if (event.target && event.target.files) {
+                file = event.target.files[0];
+            }
+            if (!file) return;
+
+            if (file.size > 5 * 1024 * 1024) {
+                this.showToast('Filen är för stor (max 5MB)', 'error');
+                return;
+            }
+
+            const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+            if (ext !== '.svg' && ext !== '.png' && ext !== '.jpg' && ext !== '.jpeg') {
+                this.showToast('Endast SVG, PNG och JPG/JPEG-filer är tillåtna', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('logo_file', file);
+
+            try {
+                this.showToast('Laddar upp logotyp...', 'info');
+                const res = await fetch('/api/settings/logo', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${this.token}` },
+                    body: formData
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    this.settings.logo_path = data.logo_path;
+                    this.logoCacheBuster = Date.now(); // force logo images to reload
+                    this.showToast('Logotyp uppladdad!', 'success');
+                } else {
+                    const err = await res.json();
+                    this.showToast('Kunde inte ladda upp logotyp: ' + err.error, 'error');
+                }
+            } catch (e) {
+                console.error("Nätverksfel vid uppladdning av logotyp", e);
+                this.showToast('Nätverksfel vid uppladdning av logotyp', 'error');
+            }
+        },
+
         guessAccountType() {
             if (!this.newAccount.code) return;
             const firstDigit = this.newAccount.code.charAt(0);
@@ -1144,6 +1086,8 @@ document.addEventListener('alpine:init', () => {
                 this.dashboard.expenses = data.expenses || 0;
                 this.dashboard.net = data.net_income || 0;
                 this.dashboard.bank = data.bank_balance || 0;
+                this.dashboard.outstanding_receivables = data.outstanding_receivables || 0;
+                this.dashboard.unpaid_count = data.unpaid_count || 0;
             } catch (e) {
                 console.error("Kunde inte hämta dashboard-data", e);
             }
@@ -1171,7 +1115,7 @@ document.addEventListener('alpine:init', () => {
 
             this.dashboard.income += addedIncome;
             this.dashboard.expenses += addedExpense;
-            this.dashboard.assets += addedAssets;
+            this.dashboard.bank += addedAssets;
             this.dashboard.net = this.dashboard.income - this.dashboard.expenses;
         },
 
@@ -1179,7 +1123,12 @@ document.addEventListener('alpine:init', () => {
             try {
                 const res = await this.authFetch('/api/maintenance/seal', { method: 'POST' });
                 if (res.ok) {
-                    this.showToast('Utkast låsta och WORM-kedjan är säkrad', 'success');
+                    const data = await res.json();
+                    if (data.Count > 0) {
+                        this.showToast(`Utkast låsta: ${data.Count} verifikationer har förseglats i WORM-kedjan!`, 'success');
+                    } else {
+                        this.showToast('Inga utkast förseglades. Alla befintliga utkast har skapats under de senaste 24 timmarna.', 'warning');
+                    }
                     this.fetchVerifications();
                     this.runVerification();
                 } else {
@@ -1298,14 +1247,59 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        async uploadRestoreFile(event) {
-            const files = event.target.files;
-            if (!files || files.length === 0) return;
-            const file = files[0];
+        openBackupModal() {
+            this.showBackupModal = true;
+            this.backupPassword = '';
+        },
+
+        async exportBackup(password = '') {
+            this.isExportingBackup = true;
+            try {
+                let url = '/api/export/backup';
+                if (password) {
+                    url += `?password=${encodeURIComponent(password)}`;
+                }
+                const res = await this.authFetch(url);
+                if (!res.ok) {
+                    this.showToast('Misslyckades att exportera backup', 'error');
+                    return;
+                }
+                const blob = await res.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+                a.download = password ? `LocalLedger_Backup_${timestamp}.zip.enc` : `LocalLedger_Backup_${timestamp}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(downloadUrl);
+                this.showToast('Säkerhetskopia hämtad!', 'success');
+                this.showBackupModal = false;
+                this.backupPassword = '';
+            } catch (e) {
+                this.showToast('Nätverksfel vid export', 'error');
+            } finally {
+                this.isExportingBackup = false;
+            }
+        },
+
+        async uploadRestoreFile(event, password = '') {
+            let file = this.restoreFileToUpload;
+            if (event && event.target.files && event.target.files.length > 0) {
+                file = event.target.files[0];
+                this.restoreFileToUpload = file;
+            }
+
+            if (!file) return;
 
             const formData = new FormData();
             formData.append('backup_zip', file);
+            if (password) {
+                formData.append('password', password);
+            }
 
+            this.isRestoring = true;
             try {
                 this.showToast('Återställer databasen. Vänligen vänta...', 'info');
                 const res = await fetch('/api/import/backup', {
@@ -1315,17 +1309,35 @@ document.addEventListener('alpine:init', () => {
                 });
                 
                 if (!res.ok) {
-                    const errText = await res.text();
-                    throw new Error(errText);
+                    let errText = '';
+                    try {
+                        const jsonErr = await res.json();
+                        if (jsonErr.error === 'password_required' || jsonErr.error === 'invalid_password') {
+                            this.restorePasswordRequired = true;
+                            this.showToast(jsonErr.error === 'invalid_password' ? 'Felaktigt lösenord!' : 'Lösenord krävs för denna krypterade backup.', 'error');
+                            this.isRestoring = false;
+                            return;
+                        }
+                        errText = jsonErr.error;
+                    } catch(e) {
+                        errText = await res.text();
+                    }
+                    throw new Error(errText || 'Okänt fel vid återställning');
                 }
                 
-                // Server returned 200 OK. It will drop & exit in 1 sec.
                 this.restoreComplete = true;
+                this.restorePasswordRequired = false;
+                this.restoreFileToUpload = null;
+                this.restorePassword = '';
                 this.showToast('Återställning klar!', 'success');
             } catch(e) {
                 this.showToast('Återställning misslyckades: ' + e.message, 'error');
+            } finally {
+                this.isRestoring = false;
+                if (event && event.target) {
+                    event.target.value = '';
+                }
             }
-            event.target.value = '';
         },
 
 	        async uploadSIEFile(event) {
@@ -1551,6 +1563,18 @@ document.addEventListener('alpine:init', () => {
                     }
                 }
 
+                if (data.suggested_account) {
+                    fieldsFound++;
+                    let rowToUpdate = this.form.rows.find(r => r.account !== '1930' && r.account !== '1910' && r.account !== '2440' && r.account !== '1510' && !r.account.startsWith('26'));
+                    if (!rowToUpdate) {
+                        rowToUpdate = this.form.rows.find(r => !r.account);
+                    }
+                    if (rowToUpdate) {
+                        rowToUpdate.account = data.suggested_account;
+                        this.showToast(`Föreslog konto ${data.suggested_account} baserat på historik!`, 'success');
+                    }
+                }
+
                 if (data.amount_cents > 0) {
                     fieldsFound++;
                     // Pre-fill the Magic Wand (Trollstaven) prompt amount, only if user hasn't typed in it yet.
@@ -1750,7 +1774,8 @@ document.addEventListener('alpine:init', () => {
         },
 
         // Command Palette Handlers
-        showView(viewName) {
+        async showView(viewName) {
+            this.currentView = viewName;
             this.showDashboard = false;
             this.showMoms = false;
             this.showKontoplan = false;
@@ -1772,6 +1797,10 @@ document.addEventListener('alpine:init', () => {
                     break;
                 case 'installningar':
                     this.showSettings = true;
+                    if (this.customersStale || this.customers.length === 0) {
+                        await this.fetchCustomers();
+                        this.customersStale = false;
+                    }
                     break;
                 case 'verktyg':
                     this.showTools = true;
@@ -1782,7 +1811,11 @@ document.addEventListener('alpine:init', () => {
                     break;
                 case 'fakturering':
                     this.showInvoices = true;
-                    this.fetchInvoices();
+                    this.loadInvoices();
+                    if (this.customersStale || this.customers.length === 0) {
+                        await this.fetchCustomers();
+                        this.customersStale = false;
+                    }
                     break;
                 case 'huvudbok':
                     // Default view is huvudbok when all others are false

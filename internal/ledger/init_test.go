@@ -30,8 +30,8 @@ func TestMigrations_Sequential(t *testing.T) {
 		t.Fatalf("Failed to count schema_migrations: %v", err)
 	}
 
-	// Vi förväntar oss 13 migreringar
-	expectedMigrations := 13
+	// Vi förväntar oss 16 migreringar
+	expectedMigrations := 16
 	if count != expectedMigrations {
 		t.Errorf("Expected %d migrations, got %d", expectedMigrations, count)
 	}
@@ -44,6 +44,14 @@ func TestMigrations_Sequential(t *testing.T) {
 	}
 	if !accountExists {
 		t.Errorf("Account 8999 was not inserted by migrations")
+	}
+
+	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM accounts WHERE code = '2621')").Scan(&accountExists)
+	if err != nil {
+		t.Fatalf("Failed to query accounts: %v", err)
+	}
+	if !accountExists {
+		t.Errorf("Account 2621 was not inserted by migrations")
 	}
 
 	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM accounts WHERE code = '3010')").Scan(&accountExists)
@@ -63,5 +71,15 @@ func TestMigrations_Sequential(t *testing.T) {
 	// Vi förväntar oss exakt 5 WORM-triggers
 	if triggerCount != 5 {
 		t.Errorf("Expected exactly 5 WORM triggers, found %d. Migrations may have dropped them!", triggerCount)
+	}
+
+	// 5.5. Verifiera att de nya WORM-skydden för fakturor (protect_posted_%) också finns
+	var postedTriggerCount int
+	err = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name LIKE 'protect_posted_%'").Scan(&postedTriggerCount)
+	if err != nil {
+		t.Fatalf("Failed to query posted triggers: %v", err)
+	}
+	if postedTriggerCount != 5 {
+		t.Errorf("Expected exactly 5 WORM triggers for invoices/items, found %d", postedTriggerCount)
 	}
 }

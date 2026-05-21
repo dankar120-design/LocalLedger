@@ -92,12 +92,21 @@ type CompanySettings struct {
 	LogoPath           string `json:"logo_path"`
 }
 
+type Customer struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Orgnr     string `json:"orgnr"`
+	Address   string `json:"address"`
+	CreatedAt string `json:"created_at"`
+}
+
 type Invoice struct {
 	ID               int64         `json:"id"`
 	InvoiceNumber    *string       `json:"invoice_number,omitempty"`
 	Date             string        `json:"date"`
 	DueDate          string        `json:"due_date"`
 	PaymentTermsDays int           `json:"payment_terms_days"`
+	CustomerID       *int64        `json:"customer_id,omitempty"`
 	CustomerName     string        `json:"customer_name"`
 	CustomerOrgnr    string        `json:"customer_orgnr"`
 	CustomerAddress  string        `json:"customer_address"`
@@ -121,8 +130,10 @@ type InvoiceItem struct {
 }
 
 type DashboardMetrics struct {
-	BankBalance int64 `json:"bank_balance"` // Summan av alla konton som börjar på 19 (tillgångar)
-	NetIncome   int64 `json:"net_income"`   // Årets resultat (Intäkter - Kostnader)
-	Income      int64 `json:"income"`       // Endast intäkter för presentation
-	Expenses    int64 `json:"expenses"`     // Endast kostnader för presentation
+	BankBalance            int64 `json:"bank_balance"`            // Summan av alla konton som börjar på 19 (tillgångar)
+	NetIncome              int64 `json:"net_income"`              // Årets resultat (Intäkter - Kostnader)
+	Income                 int64 `json:"income"`                 // Endast intäkter för presentation
+	Expenses               int64 `json:"expenses"`               // Endast kostnader för presentation
+	OutstandingReceivables int64 `json:"outstanding_receivables"` // Utestående kundfordringar i öre
+	UnpaidCount            int   `json:"unpaid_count"`            // Antal obetalda bokförda fakturor
 }
