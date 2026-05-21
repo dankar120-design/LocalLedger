@@ -36,21 +36,7 @@
   --sidebar-w: 260px;
 }
 
-/* Light Mode Toggle */
-[data-theme="light"] {
-  color-scheme: light;
-  --bg-body: #f8fafc;
-  --bg-surface: rgba(255, 255, 255, 0.7);
-  --bg-panel: #ffffff;
-  --text-main: #0f172a;
-  --text-muted: #64748b;
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --primary-glow: rgba(37, 99, 235, 0.2);
-  --border: #e2e8f0;
-  --success: #166534;
-  --danger: #991b1b;
-}
+/* Light Mode Toggle is deprecated and removed to force 100% premium dark fintech mode */
 
 [x-cloak] { display: none !important; }
 
@@ -877,9 +863,30 @@ input:focus, select:focus {
         }
         .invoice-grid {
             display: grid;
-            grid-template-columns: 1fr 350px;
+            grid-template-columns: 350px 1fr;
             gap: 1.5rem;
             align-items: start;
+        }
+        
+        @media (max-width: 1024px) {
+            .invoice-grid {
+                grid-template-columns: 1fr;
+            }
+            .invoice-card {
+                height: auto !important;
+            }
+        }
+
+        .invoice-item-desc {
+            font-size: 1.05rem !important;
+            font-weight: 500 !important;
+            border-color: rgba(255, 255, 255, 0.3) !important;
+            background: rgba(255, 255, 255, 0.02) !important;
+        }
+
+        select option {
+            background-color: var(--bg-panel);
+            color: var(--text-main);
         }
         .invoice-card {
             background: var(--surface);
@@ -1247,4 +1254,127 @@ input:focus, select:focus {
   background: rgba(248, 113, 113, 0.1) !important;
   border-color: rgba(248, 113, 113, 0.2) !important;
 }
+
+/* Company Topbar Sticky */
+.company-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.company-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.company-topbar-logo {
+  max-height: 28px;
+  max-width: 28px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.company-topbar-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.company-topbar-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-main);
+}
+
+.company-topbar-org {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.company-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.company-topbar-badge {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(6, 182, 212, 0.1);
+  color: var(--primary);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+}
+
+.company-topbar-badge.locked {
+  background: rgba(248, 113, 113, 0.1);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.2);
+}
+
+.tip-button {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.2s;
+}
+
+.tip-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.form-tip-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  background: var(--primary);
+  color: #000;
+  font-weight: bold;
+  font-size: 10px;
+  border-radius: 50%;
+  cursor: help;
+  position: relative;
+}
+
+.form-tip-indicator:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.95);
+  color: #fff;
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  width: 220px;
+  white-space: normal;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  text-align: left;
+  font-family: inherit;
+}
+
 

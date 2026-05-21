@@ -1,0 +1,7 @@
+No database found at sandbox_e2e\ledger.db. Initializing fresh workspace...
+Initializing LocalLedger at: sandbox_e2e
+[Inbox] Running Orphan Reconciliation...
+[Inbox] Reconciliation complete. No orphans found.
+Opening browser at http://127.0.0.1:8080/?_t=1779194349
+Starting LocalLedger API on http://127.0.0.1:8080
+SECURITY TOKEN: f43a1e0ffa27744e587bca347f80a897be3ad2261647cbebc711140258428a9c

@@ -29,6 +29,7 @@ type VatReport struct {
 	IncomingVat int64    `json:"incoming_vat"` // Bevarad för UI-bakåtkompatibilitet
 	NetVat      int64    `json:"net_vat"`      // Bevarad för UI-bakåtkompatibilitet
 	Boxes       VatBoxes `json:"boxes"`
+	IsLocked    bool     `json:"is_locked"`
 }
 
 // GetVatReport genererar en summering av moms och försäljning för en given period.
@@ -54,6 +55,7 @@ func (l *Ledger) GetVatReport(startDate, endDate string) (*VatReport, error) {
 
 	// Vi hämtar exakt de konton vi har strikt stöd för i svensk momsredovisning.
 	// Försäljningskonton täcker standardscenarier, inklusive provisionerade konton.
+	// Omföringar exkluderas explicit för att inte nollställa rapporten efter låsning.
 	query := `
 		SELECT 
 			a.code, 
@@ -63,6 +65,7 @@ func (l *Ledger) GetVatReport(startDate, endDate string) (*VatReport, error) {
 		JOIN verifications v ON r.verification_id = v.id
 		JOIN accounts a ON r.account = a.code
 		WHERE v.date >= ? AND v.date <= ?
+		  AND v.type != 'MOMSOMFORING' AND v.text NOT LIKE 'Momsomföring%'
 		  AND a.code IN (
 			'3000', '3001', '3002', '3003', '3010', '3011', '3020', '3040', '3041', '3042', '3043',
 			'4515', '4531',
@@ -139,6 +142,24 @@ func (l *Ledger) GetVatReport(startDate, endDate string) (*VatReport, error) {
 
 	report.NetVat = report.OutgoingVat - report.IncomingVat
 
+	// Kontrollera om perioden eller någon månad i den är låst
+	startVal, err := time.Parse("2006-01-02", startDate)
+	if err == nil {
+		endVal, err := time.Parse("2006-01-02", endDate)
+		if err == nil {
+			startVal = time.Date(startVal.Year(), startVal.Month(), 1, 0, 0, 0, 0, startVal.Location())
+			for d := startVal; d.Before(endVal) || d.Equal(endVal); d = d.AddDate(0, 1, 0) {
+				yearMonth := d.Format("2006-01")
+				var exists int
+				err := l.db.QueryRow("SELECT COUNT(*) FROM period_locks WHERE year_month = ?", yearMonth).Scan(&exists)
+				if err == nil && exists > 0 {
+					report.IsLocked = true
+					break
+				}
+			}
+		}
+	}
+
 	return report, nil
 }
 
@@ -165,6 +186,25 @@ func (l *Ledger) TransferVat(user, startDate, endDate string) error {
 	err = l.db.QueryRow("SELECT locked_at IS NOT NULL FROM fiscal_years WHERE id = ?", fy.ID).Scan(&isLocked)
 	if err == nil && isLocked {
 		return ErrFiscalYearLocked
+	}
+
+	// Kontrollera om någon månad i perioden redan är låst innan vi påbörjar omföring
+	startCheck, err := time.Parse("2006-01-02", startDate)
+	if err != nil {
+		return fmt.Errorf("invalid start date format: %w", err)
+	}
+	endCheck, err := time.Parse("2006-01-02", endDate)
+	if err != nil {
+		return fmt.Errorf("invalid end date format: %w", err)
+	}
+	startCheck = time.Date(startCheck.Year(), startCheck.Month(), 1, 0, 0, 0, 0, startCheck.Location())
+	for d := startCheck; d.Before(endCheck) || d.Equal(endCheck); d = d.AddDate(0, 1, 0) {
+		yearMonth := d.Format("2006-01")
+		var exists int
+		err := l.db.QueryRow("SELECT COUNT(*) FROM period_locks WHERE year_month = ?", yearMonth).Scan(&exists)
+		if err == nil && exists > 0 {
+			return ErrPeriodLocked
+		}
 	}
 
 	// 3. Hämta alla momskonton som har saldo baserat på strikt godkända momskonton.
@@ -253,6 +293,7 @@ func (l *Ledger) TransferVat(user, startDate, endDate string) error {
 	verification := models.VerificationRequest{
 		Date: endDate,
 		Text: fmt.Sprintf("Momsomföring %s - %s", startDate, endDate),
+		Type: "MOMSOMFORING",
 		Rows: verificationRows,
 	}
 

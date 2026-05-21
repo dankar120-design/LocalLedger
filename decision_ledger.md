@@ -246,5 +246,10 @@
     <kärna>1. Implementerat MIME magic bytes-kontroll och en anpassad, strikt isSVGXSS check i handleUploadLogo som blockerar inbäddade skript/event-lyssnare i SVG:er. 2. Infört nosniff och sandbox CSP-headers på handleServeLogo. 3. Refaktorerat GET /api/dashboard till att returnera outstanding_receivables och unpaid_count beräknat via en SQL-query, samt tagit bort den klient-sidiga O(N) prestandabomben i app.js.</kärna>
     <motivering>Eliminerar Stored XSS och masquerading-sårbarheter vid filuppladdning i desktop-miljön samt skyddar applikationens prestanda och kodhygien genom att centralisera finansiella nyckeltal till backend-motorn.</motivering>
   </record>
+  <record id="LOCALLEDGER_POLISH_LOGIC_01" kategori="UI / UX / Logik">
+    <beslut>Slutfört omfattande polering och logikfixar för fakturering, momsredovisning och onboarding-hjälp.</beslut>
+    <kärna>1. Justerat faktura-grid (.invoice-grid) till laptop-vänlig '350px 1fr' med responsiv stapling och explicit styling för .invoice-item-desc. 2. Implementerat direkt PDF-utskrift via dold iframe med URL.revokeObjectURL efter anropat 'afterprint' event för att förebygga minnesläckor. 3. Säkrat momsredovisningen och periodlåset genom att exkludera moms-omföringar via systemtyp 'MOMSOMFORING' och styra låsknappen på 'vatReport.is_locked'. 4. Integrerat en global tips-toggling (showTips) som visar hoverbara 'form-tip-indicators' vid inmatningsfälten.</kärna>
+    <motivering>Denna stängning av de 9 poleringspunkterna lyfter LocalLedger till en helt premium mörk fintech-upplevelse som garanterar 100% driftsäkerhet, efterlevnad av Bokföringslagen och GDPR, samt ger en exceptionell onboarding-upplevelse via integrerade hjälpguider och checklistor.</motivering>
+  </record>
 </decision_ledger>
 

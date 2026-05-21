@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"localledger/internal/models"
 	"math"
+	"path/filepath"
 	"time"
 )
 
@@ -508,6 +509,10 @@ func (l *Ledger) PostInvoice(invoiceID int64, user string) error {
 	settings, err := l.GetSettings()
 	if err != nil {
 		return fmt.Errorf("failed to get company settings for pdf: %w", err)
+	}
+
+	if settings.LogoPath != "" {
+		settings.LogoPath = filepath.Join(l.WorkspacePath(), settings.LogoPath)
 	}
 
 	pdfBase64, err := GenerateInvoicePDF(inv, settings, newInvoiceNumber)

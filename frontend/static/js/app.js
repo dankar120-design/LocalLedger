@@ -21,6 +21,7 @@ document.addEventListener('alpine:init', () => {
         showInvoices: false,
         showTools: false,
         showReports: false,
+        showHelp: false,
         isLoadingReport: false,
         financialReport: null,
         invoices: [],
@@ -42,6 +43,12 @@ document.addEventListener('alpine:init', () => {
         bugLog: [],
         armedActionId: null,
         invoiceAbortController: null,
+        showTips: true,
+        helpCheckbox1: localStorage.getItem('helpCheckbox1') === 'true',
+        helpCheckbox2: localStorage.getItem('helpCheckbox2') === 'true',
+        helpCheckbox3: localStorage.getItem('helpCheckbox3') === 'true',
+        helpCheckbox4: localStorage.getItem('helpCheckbox4') === 'true',
+        helpCheckbox5: localStorage.getItem('helpCheckbox5') === 'true',
 
         confirmModal: { 
             show: false, 
@@ -652,6 +659,48 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        async printInvoicePDF(id) {
+            try {
+                this.showToast("Förbereder utskrift...", "info");
+                const res = await this.authFetch(`/api/invoices/${id}/pdf`);
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    
+                    let iframe = document.getElementById('print-iframe');
+                    if (!iframe) {
+                        iframe = document.createElement('iframe');
+                        iframe.id = 'print-iframe';
+                        iframe.style.position = 'fixed';
+                        iframe.style.width = '0';
+                        iframe.style.height = '0';
+                        iframe.style.border = 'none';
+                        document.body.appendChild(iframe);
+                    }
+                    iframe.src = url;
+                    iframe.onload = () => {
+                        iframe.contentWindow.focus();
+                        iframe.contentWindow.print();
+                        
+                        const cleanup = () => {
+                            try {
+                                URL.revokeObjectURL(url);
+                            } catch(e){}
+                        };
+                        
+                        iframe.contentWindow.addEventListener('afterprint', cleanup, { once: true });
+                        setTimeout(cleanup, 300000); // 5 minute fallback
+                    };
+                } else {
+                    const errText = await res.text();
+                    this.showToast("Kunde inte hämta PDF för utskrift: " + errText, "error");
+                }
+            } catch (e) {
+                console.error(e);
+                this.showToast("Utskrift misslyckades: " + e.message, "error");
+            }
+        },
+
         async settleInvoice(id) {
             const proceed = await this.confirmAction("Vill du kvitta denna kreditfaktura mot originalfakturan?", "Kvitta", "Kvitta", false);
             if (!proceed) return;
@@ -1093,6 +1142,21 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        async refreshAllData() {
+            try {
+                await Promise.all([
+                    this.fetchVerifications(),
+                    this.fetchAccounts(),
+                    this.fetchDashboardData(),
+                    this.fetchFiscalYears(),
+                    this.fetchInbox(),
+                    this.fetchCustomers()
+                ]);
+            } catch (e) {
+                console.error("Fel vid uppdatering av data: ", e);
+            }
+        },
+
         updateDashboardLocally(rows) {
             let addedIncome = 0;
             let addedExpense = 0;
@@ -1185,7 +1249,7 @@ document.addEventListener('alpine:init', () => {
                 if (!res.ok) throw new Error((await res.json()).error);
                 this.showToast('Momsen är nu omförd och perioden låst!', 'success');
                 this.vatReport = null;
-                this.fetchData();
+                await this.refreshAllData();
             } catch (e) {
                 this.showToast('Fel vid momsomföring: ' + e.message, 'error');
             }
@@ -1367,7 +1431,7 @@ document.addEventListener('alpine:init', () => {
                 }
                 
                 this.showToast('SIE-fil importerad framgångsrikt!', 'success');
-                this.fetchData();
+                await this.refreshAllData();
             } catch(e) {
                 this.showToast('Import misslyckades: ' + e.message, 'error');
             }
@@ -1395,7 +1459,7 @@ document.addEventListener('alpine:init', () => {
                 }
 
                 this.showToast('Ingående Balans skapad!', 'success');
-                this.fetchData();
+                await this.refreshAllData();
             } catch(e) {
                 this.showToast('Misslyckades att generera IB: ' + e.message, 'error');
             }
@@ -1783,6 +1847,7 @@ document.addEventListener('alpine:init', () => {
             this.showInvoices = false;
             this.showTools = false;
             this.showReports = false;
+            this.showHelp = false;
             this.isInboxDrawerOpen = false;
 
             switch(viewName) {
@@ -1808,6 +1873,9 @@ document.addEventListener('alpine:init', () => {
                 case 'rapporter':
                     this.showReports = true;
                     this.loadFinancialReport();
+                    break;
+                case 'help':
+                    this.showHelp = true;
                     break;
                 case 'fakturering':
                     this.showInvoices = true;
