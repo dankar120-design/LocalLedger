@@ -110,6 +110,13 @@ func StartSetupServer(port int) (string, error) {
 					w.Write([]byte(`{"error": "Mappen var ogiltig."}`))
 					return
 				}
+
+				if isRootDirectory(selectedWorkspace) {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadRequest)
+					w.Write([]byte(`{"error": "Du kan inte välja en hel rot-enhet (t.ex. C:\\) direkt. Skapa eller välj en specifik undermapp (t.ex. C:\\LocalLedger_Data) för att hålla dina filer rena."}`))
+					return
+				}
 			} else {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
@@ -153,6 +160,13 @@ func StartSetupServer(port int) (string, error) {
 				return
 			}
 
+			if isRootDirectory(folderPath) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(`{"error": "Du kan inte välja en hel rot-enhet (t.ex. C:\\) direkt. Skapa eller välj en specifik undermapp (t.ex. C:\\LocalLedger_Data) för att hålla dina filer rena."}`))
+				return
+			}
+
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(fmt.Sprintf(`{"folder": %q}`, folderPath)))
 			return
@@ -180,6 +194,13 @@ func StartSetupServer(port int) (string, error) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte(`{"error": "Ingen målmapp angiven"}`))
+				return
+			}
+
+			if isRootDirectory(targetWorkspace) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(`{"error": "Du kan inte välja en hel rot-enhet (t.ex. C:\\) direkt. Skapa eller välj en specifik undermapp (t.ex. C:\\LocalLedger_Data) för att hålla dina filer rena."}`))
 				return
 			}
 
@@ -504,4 +525,14 @@ func createDesktopShortcut() {
 
 	cmd := exec.Command("powershell", "-NoProfile", "-Command", psScript)
 	cmd.Run()
+}
+
+// isRootDirectory kontrollerar om en sökväg är en rå volym/rot-enhet på Windows
+func isRootDirectory(path string) bool {
+	if path == "" {
+		return false
+	}
+	cleaned := filepath.Clean(path)
+	vol := filepath.VolumeName(cleaned)
+	return cleaned == vol || cleaned == vol+string(filepath.Separator)
 }

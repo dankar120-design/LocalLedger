@@ -56,7 +56,7 @@ func (s *Server) handleUploadLogo(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if ext == ".png" {
 		if mimeType != "image/png" {
-			writeError(w, errors.New("uppladdad PNG-fil har ogiltig MIME-typ (matchar inte image/png)"))
+			writeError(w, errors.New("Kunde inte ladda upp logotyp: filen har en ogiltig intern MIME-typ. Detta händer oftast om en JPG-, WebP- eller PDF-fil har döpts om till .png manuellt. Spara om filen i ett riktigt bildprogram."))
 			return
 		}
 	} else if ext == ".jpg" || ext == ".jpeg" {

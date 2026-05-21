@@ -266,5 +266,10 @@
     <kärna>1. Rensat phantom 'invoices/' katalog-logiken i setup.go för att undvika onödig tom mappskapande. 2. Implementerat robusta retry-loopar (upp till 5 försök med 200ms sleep) och explicit felrapportering på os.Remove och os.Rename för databas- och attachments-operationer under både Setup-återställning (setup.go) och Hot-återställning (backup.go).</kärna>
     <motivering>En fientlig arkitekturgranskning (FAS 1 &amp; 2) påvisade potentiella risker för Windows-specifika fillåsningsfel (ERROR_SHARING_VIOLATION) direkt efter Close() på databasen. Genom att införa retry-loopar och städa bort den icke-existerande invoices-katalogen garanteras 100% driftsäkerhet och atomicitet på Windows under hela återställningscykeln.</motivering>
   </record>
+  <record id="UX_ROBUSTNESS_HARDENING_01" kategori="UI/UX / Robusthet">
+    <beslut>Implementerat omfattande UI-buggfixar, root-mappsvalidering och förtydligat felmeddelande för logotypuppladdning.</beslut>
+    <kärna>1. Säkrat /restore-endpointen i setup.go mot Windows rot-enheter via isRootDirectory-kontroll. 2. Förbättrat PNG MIME-valideringsfel i logo.go. 3. Ändrat .company-topbar från sticky till relative i style.css för att undvika överlappningar. 4. Lagt till showHelp-negation i index.html för nav-highlight och paneldöljning vid visning av Hjälp &amp; Guide.</kärna>
+    <motivering>Löser användarrapporterade problem från pilottester rörande röriga rotkataloger, otydliga MIME-fel vid omdöpta bildfiler, störande CSS-överlappningar i listor/inmatning samt navigeringsbuggar för Hjälp &amp; Guide.</motivering>
+  </record>
 </decision_ledger>
 

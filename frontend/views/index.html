@@ -82,7 +82,7 @@
         
         <nav>
             <a class="nav-item" href="#" @click.prevent="showView('dashboard')" :class="showDashboard ? 'active' : ''" style="display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg> Översikt</a>
-            <a class="nav-item" href="#" @click.prevent="showView('huvudbok')" :class="!showSettings && !showKontoplan && !showMoms && !showDashboard && !showInvoices && !showTools && !showReports ? 'active' : ''" style="display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg> Huvudbok</a>
+            <a class="nav-item" href="#" @click.prevent="showView('huvudbok')" :class="!showSettings && !showKontoplan && !showMoms && !showDashboard && !showInvoices && !showTools && !showReports && !showHelp ? 'active' : ''" style="display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg> Huvudbok</a>
             <a class="nav-item" href="#" @click.prevent="showView('fakturering')" :class="showInvoices ? 'active' : ''" style="display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> Fakturering</a>
             <a class="nav-item" href="#" @click.prevent="showView('rapporter')" :class="showReports ? 'active' : ''" style="display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg> Rapporter</a>
             <a class="nav-item" href="#" @click.prevent="showView('verktyg')" :class="showTools ? 'active' : ''" style="display: flex; align-items: center; gap: 0.5rem;"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg> Verktyg & Export</a>
@@ -149,7 +149,7 @@
             </div>
         </div>
 
-        <header class="header" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports && !showDashboard">
+        <header class="header" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports && !showDashboard && !showHelp">
             <div>
                 <h1>Huvudbok</h1>
             </div>
@@ -293,7 +293,7 @@
         </section>
 
         <!-- Bokföringsformulär -->
-        <section class="panel" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports && !showDashboard && fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked">
+        <section class="panel" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports && !showDashboard && !showHelp && fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked">
             <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
                 <svg class="icon-xl" style="color: var(--text-muted); margin-bottom: 1rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                 <h2>Räkenskapsåret är låst</h2>
@@ -301,7 +301,7 @@
             </div>
         </section>
 
-        <section class="panel" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports && !showDashboard && !(fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked)" @keydown.window.ctrl.enter.prevent="submitPost()">
+        <section class="panel" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports && !showDashboard && !showHelp && !(fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked)" @keydown.window.ctrl.enter.prevent="submitPost()">
             <h2 style="margin-bottom: 1rem; font-size: 1.1rem;">Ny Verifikation</h2>
 
             <div class="magic-wand-container">
@@ -419,7 +419,7 @@
         </section>
 
         <!-- Tabell -->
-        <section class="panel" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports && !showDashboard">
+        <section class="panel" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports && !showDashboard && !showHelp">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <input type="text" x-model="searchQuery" placeholder="Sök konto, text, ID..." style="max-width: 300px;">
                 <button class="primary" style="background: var(--danger); box-shadow: 0 4px 12px rgba(248, 113, 113, 0.3); display: flex; align-items: center; gap: 0.5rem;" @click="showSealModal = true" title="Låser alla utkast äldre än 24h manuellt"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> WORM-Försegla Utkast</button>
@@ -516,7 +516,7 @@
         </section>
 
         <!-- Inbox Drawer -->
-        <section class="inbox-drawer" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports && !showDashboard" :class="isInboxDrawerOpen ? 'open' : ''">
+        <section class="inbox-drawer" x-show="!showInvoices && !showSettings && !showKontoplan && !showMoms && !showTools && !showReports && !showDashboard && !showHelp" :class="isInboxDrawerOpen ? 'open' : ''">
             <div class="inbox-drawer-header" @click="isInboxDrawerOpen = !isInboxDrawerOpen">
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
