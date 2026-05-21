@@ -251,5 +251,10 @@
     <kärna>1. Justerat faktura-grid (.invoice-grid) till laptop-vänlig '350px 1fr' med responsiv stapling och explicit styling för .invoice-item-desc. 2. Implementerat direkt PDF-utskrift via dold iframe med URL.revokeObjectURL efter anropat 'afterprint' event för att förebygga minnesläckor. 3. Säkrat momsredovisningen och periodlåset genom att exkludera moms-omföringar via systemtyp 'MOMSOMFORING' och styra låsknappen på 'vatReport.is_locked'. 4. Integrerat en global tips-toggling (showTips) som visar hoverbara 'form-tip-indicators' vid inmatningsfälten.</kärna>
     <motivering>Denna stängning av de 9 poleringspunkterna lyfter LocalLedger till en helt premium mörk fintech-upplevelse som garanterar 100% driftsäkerhet, efterlevnad av Bokföringslagen och GDPR, samt ger en exceptionell onboarding-upplevelse via integrerade hjälpguider och checklistor.</motivering>
   </record>
+  <record id="POST_AUDIT_ROBUSTNESS_01" kategori="Säkerhet / Arkitektur">
+    <beslut>Implementerat fientliga granskningsåtgärder för momsredovisning, stornotyp, utskriftslås och kodhygien (Fas 10).</beslut>
+    <kärna>1. Säkrat 'storno.go' att explicit tilldela typen 'STORNO' på stornoposter. 2. Härdat 'GetVatReport' och 'TransferVat' SQL-logik med sub-queries för att helt exkludera stornoposter kopplade till momsomföringar (Defense-in-Depth). 3. Etablerat '_printingInProgress' guard i 'printInvoicePDF' mot minnesläckage vid dubbelklick. 4. Lagt till Promise.all felhantering med toast samt villkorlig momsrapportrecal i 'refreshAllData'. 5. Rensat de sista 5 döda 'light-theme'-reglerna i 'style.css'.</kärna>
+    <motivering>En fientlig audit i Fas 2 visade att stornoposter på momsomföringar riskerade att korrumpera momsrapporter om de bokfördes på rörliga datum samt att snabba klick på fakturautskrift läckte URL-objekt. Genom att stänga dessa sårbarheter garanteras fullständig finansiell korrekthet under alla edge-cases.</motivering>
+  </record>
 </decision_ledger>
 

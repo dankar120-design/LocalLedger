@@ -66,6 +66,7 @@ func (l *Ledger) GetVatReport(startDate, endDate string) (*VatReport, error) {
 		JOIN accounts a ON r.account = a.code
 		WHERE v.date >= ? AND v.date <= ?
 		  AND v.type != 'MOMSOMFORING' AND v.text NOT LIKE 'Momsomföring%'
+		  AND (v.storno_ref_id IS NULL OR v.storno_ref_id NOT IN (SELECT id FROM verifications WHERE type = 'MOMSOMFORING' OR text LIKE 'Momsomföring%'))
 		  AND a.code IN (
 			'3000', '3001', '3002', '3003', '3010', '3011', '3020', '3040', '3041', '3042', '3043',
 			'4515', '4531',
@@ -215,7 +216,10 @@ func (l *Ledger) TransferVat(user, startDate, endDate string) error {
 		FROM verification_rows r
 		JOIN verifications v ON r.verification_id = v.id
 		JOIN accounts a ON r.account = a.code
-		WHERE v.date >= ? AND v.date <= ? AND a.code IN ('2610', '2611', '2614', '2620', '2621', '2630', '2631', '2640', '2641', '2645')
+		WHERE v.date >= ? AND v.date <= ?
+		  AND v.type != 'MOMSOMFORING' AND v.text NOT LIKE 'Momsomföring%'
+		  AND (v.storno_ref_id IS NULL OR v.storno_ref_id NOT IN (SELECT id FROM verifications WHERE type = 'MOMSOMFORING' OR text LIKE 'Momsomföring%'))
+		  AND a.code IN ('2610', '2611', '2614', '2620', '2621', '2630', '2631', '2640', '2641', '2645')
 		GROUP BY a.code
 		HAVING balance_debet != 0
 	`

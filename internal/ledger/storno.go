@@ -100,7 +100,7 @@ func (l *Ledger) StornoVerification(originalID int64, user string) (*models.Veri
 	newText := fmt.Sprintf("Reversering av A%d", originalID)
 	var newID int64
 	var createdAt string
-	err = tx.QueryRow("INSERT INTO verifications (date, text, hash, storno_ref_id) VALUES (?, ?, NULL, ?) RETURNING id, created_at", today, newText, originalID).Scan(&newID, &createdAt)
+	err = tx.QueryRow("INSERT INTO verifications (date, text, type, hash, storno_ref_id) VALUES (?, ?, 'STORNO', NULL, ?) RETURNING id, created_at", today, newText, originalID).Scan(&newID, &createdAt)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return nil, fmt.Errorf("%w: verification %d is already stornoed", ErrValidation, originalID)

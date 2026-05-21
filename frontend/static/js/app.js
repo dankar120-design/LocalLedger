@@ -660,7 +660,12 @@ document.addEventListener('alpine:init', () => {
         },
 
         async printInvoicePDF(id) {
+            if (this._printingInProgress) {
+                this.showToast("En utskrift pågår redan. Vänligen vänta.", "warning");
+                return;
+            }
             try {
+                this._printingInProgress = true;
                 this.showToast("Förbereder utskrift...", "info");
                 const res = await this.authFetch(`/api/invoices/${id}/pdf`);
                 if (res.ok) {
@@ -686,16 +691,19 @@ document.addEventListener('alpine:init', () => {
                             try {
                                 URL.revokeObjectURL(url);
                             } catch(e){}
+                            this._printingInProgress = false;
                         };
                         
                         iframe.contentWindow.addEventListener('afterprint', cleanup, { once: true });
                         setTimeout(cleanup, 300000); // 5 minute fallback
                     };
                 } else {
+                    this._printingInProgress = false;
                     const errText = await res.text();
                     this.showToast("Kunde inte hämta PDF för utskrift: " + errText, "error");
                 }
             } catch (e) {
+                this._printingInProgress = false;
                 console.error(e);
                 this.showToast("Utskrift misslyckades: " + e.message, "error");
             }
@@ -1152,8 +1160,14 @@ document.addEventListener('alpine:init', () => {
                     this.fetchInbox(),
                     this.fetchCustomers()
                 ]);
+                
+                // Om vi har ett aktivt momsdatumintervall, uppdatera rapporten också
+                if (this.vatStartDate && this.vatEndDate) {
+                    await this.calculateVatReport();
+                }
             } catch (e) {
                 console.error("Fel vid uppdatering av data: ", e);
+                this.showToast("Misslyckades att uppdatera sidans data: " + e.message, "error");
             }
         },
 
