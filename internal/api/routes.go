@@ -44,7 +44,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/settings/logo", s.handleServeLogo)
 	mux.HandleFunc("POST /api/accounts", s.handleAddAccount)
 	mux.HandleFunc("GET /api/export/sie4", s.handleExportSIE4)
-	mux.HandleFunc("GET /api/export/backup", s.handleExportBackup)
+	mux.HandleFunc("POST /api/export/backup", s.handleExportBackup)
 	mux.HandleFunc("POST /api/import/backup", s.handleRestoreBackup)
 	mux.HandleFunc("GET /api/vat-report", s.handleGetVatReport)
 	mux.HandleFunc("POST /api/vat-report/transfer", s.handleTransferVat)

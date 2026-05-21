@@ -1333,11 +1333,12 @@ document.addEventListener('alpine:init', () => {
         async exportBackup(password = '') {
             this.isExportingBackup = true;
             try {
-                let url = '/api/export/backup';
-                if (password) {
-                    url += `?password=${encodeURIComponent(password)}`;
-                }
-                const res = await this.authFetch(url);
+                const url = '/api/export/backup';
+                const res = await this.authFetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
                 if (!res.ok) {
                     this.showToast('Misslyckades att exportera backup', 'error');
                     return;

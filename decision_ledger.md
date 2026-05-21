@@ -256,5 +256,10 @@
     <kärna>1. Säkrat 'storno.go' att explicit tilldela typen 'STORNO' på stornoposter. 2. Härdat 'GetVatReport' och 'TransferVat' SQL-logik med sub-queries för att helt exkludera stornoposter kopplade till momsomföringar (Defense-in-Depth). 3. Etablerat '_printingInProgress' guard i 'printInvoicePDF' mot minnesläckage vid dubbelklick. 4. Lagt till Promise.all felhantering med toast samt villkorlig momsrapportrecal i 'refreshAllData'. 5. Rensat de sista 5 döda 'light-theme'-reglerna i 'style.css'.</kärna>
     <motivering>En fientlig audit i Fas 2 visade att stornoposter på momsomföringar riskerade att korrumpera momsrapporter om de bokfördes på rörliga datum samt att snabba klick på fakturautskrift läckte URL-objekt. Genom att stänga dessa sårbarheter garanteras fullständig finansiell korrekthet under alla edge-cases.</motivering>
   </record>
+  <record id="POST_AUDIT_RESTORE_ONBOARDING_01" kategori="Säkerhet / Arkitektur">
+    <beslut>Implementerat fullständig och säker återställning från krypterad eller okrypterad backup (.llbak) under onboarding (Setup Wizard).</beslut>
+    <kärna>1. Skapat endpoints /select-folder och /restore i Setup-multiplexern i setup.go som stöder PowerShell FolderBrowserDialog och multipart-uppladdning. 2. Integrerat decryptPayload, Anti-Zip Slip och ledger.OpenLedger schema- och korruptionsvalidering (v3.0.0) under uppstarts-restorering. 3. Uppdaterat setup.html med en premium och lyxig "Återställ från Säkerhetskopia" glassmorfisk expander med drag-and-drop droppzon, lösenordsfält och dynamic progress feedback.</kärna>
+    <motivering>Genom att bygga in fullständigt stöd för att starta från en befintlig säkerhetskopia direkt i onboarding-skedet slipper användare manuellt fippla med mappar på disk eller starta tomma arbetsytor innan återställning görs. Integrerad validering skyddar mot nedgraderingsattacker, skadade zippar eller korrupta SQLite-databaser innan driftsättning sker.</motivering>
+  </record>
 </decision_ledger>
 

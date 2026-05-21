@@ -6,6 +6,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -93,10 +94,18 @@ func decryptPayload(encryptedData []byte, password string) ([]byte, error) {
 }
 
 func (s *Server) handleExportBackup(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	var req struct {
+		Password string `json:"password"`
+	}
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+	password := req.Password
 
 	// 1. Skapa en temporär databasfil för VACUUM INTO
 	tempFile, err := os.CreateTemp("", "localledger_backup_*.db")
@@ -168,8 +177,16 @@ func (s *Server) handleExportBackup(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-	} else {
-		log.Printf("Attachments directory not found or error reading: %v", err)
+	}
+	// Lägg till logotyp om en sådan finns konfigurerad och existerar på disk
+	settings, err := s.ledger.GetSettings()
+	if err == nil && settings.LogoPath != "" {
+		logoPath := filepath.Join(s.ledger.WorkspacePath(), settings.LogoPath)
+		if _, errStat := os.Stat(logoPath); errStat == nil {
+			if errZip := addFileToZip(settings.LogoPath, logoPath); errZip != nil {
+				log.Printf("Failed to zip logo %s: %v", settings.LogoPath, errZip)
+			}
+		}
 	}
 
 	// Stäng zip-skrivaren och filen för att spara allt
@@ -180,9 +197,6 @@ func (s *Server) handleExportBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tempZipFile.Close()
-
-	// Kontrollera om kryptering önskas
-	password := r.URL.Query().Get("password")
 
 	var outputBytes []byte
 	if password != "" {
@@ -369,7 +383,7 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 4. Validera den uppackade databasen (Fångar Downgrades & Korruption)
-	tempLedger, err := ledger.OpenLedger(stagingDir, "v1.4.0")
+	tempLedger, err := ledger.OpenLedger(stagingDir, "v3.0.0")
 	if err != nil {
 		log.Printf("Restore validation failed: %v", err)
 		os.RemoveAll(stagingDir)
@@ -405,6 +419,17 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 
 		os.RemoveAll(attachPath)
 		os.Rename(filepath.Join(stagingDir, "attachments"), attachPath)
+
+		// Flytta eventuella andra filer (som company_logo.*) från staging till workspace
+		if files, errRead := os.ReadDir(stagingDir); errRead == nil {
+			for _, f := range files {
+				if !f.IsDir() && f.Name() != "ledger.db" {
+					dest := filepath.Join(wsPath, f.Name())
+					os.Remove(dest)
+					os.Rename(filepath.Join(stagingDir, f.Name()), dest)
+				}
+			}
+		}
 
 		os.RemoveAll(stagingDir)
 
