@@ -55,8 +55,8 @@
          style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 99999;" 
          x-cloak>
         <div class="panel" style="max-width: 700px; width: 90%; max-height: 85vh; border: 1px solid var(--border); box-shadow: 0 25px 50px rgba(0,0,0,0.6); display: flex; flex-direction: column; padding: 2rem;">
-            <h2 style="color: var(--accent); display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; margin-top: 0;">
-                <svg class="nav-icon" style="color: var(--accent); width: 24px; height: 24px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            <h2 style="color: var(--primary); display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; margin-top: 0;">
+                <svg class="nav-icon" style="color: var(--primary); width: 24px; height: 24px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                 Slutanvändaravtal (EULA) &mdash; LocalLedger
             </h2>
             <p style="color: var(--text-main); font-size: 0.95rem; margin-bottom: 1rem; line-height: 1.5;"
@@ -118,7 +118,7 @@
                 <button x-show="isEulaReadOnly" class="btn" style="border: 1px solid var(--border); background: rgba(255,255,255,0.02); color: var(--text-main); padding: 0.75rem 1.5rem; font-weight: bold; cursor: pointer; border-radius: 6px;" @click="showEulaModal = false">
                     Stäng
                 </button>
-                <button x-show="!isEulaReadOnly" class="primary" style="background: var(--accent); box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3); font-weight: bold; padding: 0.75rem 1.5rem;" @click="acceptEula()">
+                <button x-show="!isEulaReadOnly" class="primary" @click="acceptEula()">
                     Jag godkänner EULA-avtalet
                 </button>
             </div>
@@ -147,7 +147,7 @@
                 </template>
             </select>
             <div style="display: flex; gap: 0.4rem;">
-                <button @click="createFiscalYear()" class="btn primary" style="flex: 1; padding: 0.35rem 0.5rem; font-size: 0.75rem; justify-content: center; display: flex; align-items: center; gap: 0.25rem; background: var(--accent); color: #fff; border-radius: 4px; border: none; cursor: pointer; font-weight: 500;">
+                <button @click="createFiscalYear()" class="primary" style="flex: 1; padding: 0.35rem 0.5rem; font-size: 0.75rem; justify-content: center; display: flex; align-items: center; gap: 0.25rem; border-radius: 4px; cursor: pointer; font-weight: 500;">
                     <svg class="nav-icon" style="width: 12px; height: 12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg> Nytt år
                 </button>
                 <button x-show="fiscalYears.length > 0 && !fiscalYears.find(f => f.id == activeFiscalYearId)?.is_locked" @click="lockFiscalYear(activeFiscalYearId)" class="btn btn-danger" style="flex: 1; padding: 0.35rem 0.5rem; font-size: 0.75rem; justify-content: center; background: var(--danger); opacity: 0.95; display: flex; align-items: center; gap: 0.25rem; border-radius: 4px; border: none; color: white; cursor: pointer; font-weight: 500;">
@@ -382,11 +382,11 @@
             <h2 style="margin-bottom: 1rem; font-size: 1.1rem;">Ny Verifikation</h2>
 
             <div class="magic-wand-container">
-                <svg class="nav-icon" style="color: var(--accent); margin-bottom: 0.5rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"></path><line x1="16" y1="8" x2="2" y2="22"></line><line x1="17.5" y1="15" x2="9" y2="6.5"></line></svg>
+                <svg class="nav-icon" style="color: var(--primary); margin-bottom: 0.5rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"></path><line x1="16" y1="8" x2="2" y2="22"></line><line x1="17.5" y1="15" x2="9" y2="6.5"></line></svg>
                 
                 <!-- Steg 1: Välj mall -->
                 <div style="flex-grow: 1;" x-show="!templatePrompt.active">
-                    <strong style="display: block; font-size: 0.9rem; color: var(--accent); margin-bottom: 4px;">Trollstaven (Snabbmallar)</strong>
+                    <strong style="display: block; font-size: 0.9rem; color: var(--primary); margin-bottom: 4px;">Trollstaven (Snabbmallar)</strong>
                     <select x-model="selectedTemplate" @change="initiateTemplate()" style="width: 100%; padding: 8px; border-radius: 4px; background: var(--bg); color: var(--text); border: 1px solid var(--border); cursor: pointer;">
                         <option value="">-- Välj en händelse för att autofylla --</option>
                         <template x-for="t in templates" :key="t.id">
@@ -398,7 +398,7 @@
                 <!-- Steg 2: Ange belopp -->
                 <div style="flex-grow: 1; display: flex; align-items: flex-end; gap: 0.5rem;" x-show="templatePrompt.active" x-cloak>
                     <div style="flex-grow: 1;">
-                        <strong style="display: block; font-size: 0.9rem; color: var(--accent); margin-bottom: 4px;">Ange totalbelopp inkl. eventuell moms (kr)</strong>
+                        <strong style="display: block; font-size: 0.9rem; color: var(--primary); margin-bottom: 4px;">Ange totalbelopp inkl. eventuell moms (kr)</strong>
                         <input type="number" x-ref="templateAmountInput" x-model="templatePrompt.amount" @keydown.enter.prevent="applyTemplateAmount()" @keydown.escape.prevent="cancelTemplate()" placeholder="T.ex. 1250" style="width: 100%; padding: 8px; border-radius: 4px; background: var(--bg-body); color: var(--text-main); border: 1px solid rgba(255, 255, 255, 0.25);">
                     </div>
                     <button class="primary" @click="applyTemplateAmount()" style="padding: 8px 16px;">Tillämpa</button>
@@ -427,13 +427,13 @@
                 <input type="file" x-ref="fileInput" @change="handleFileDrop" style="display: none" accept=".pdf,image/png,image/jpeg">
                 
                 <template x-if="isScanningOcr">
-                    <div style="color: var(--accent); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem 0;">
+                    <div style="color: var(--primary); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem 0;">
                         <!-- Simple Spinner via animation-spin utility -->
                         <style>
                             @keyframes ocr-spin { 100% { transform: rotate(360deg); } }
                             .ocr-spinner { animation: ocr-spin 1.5s linear infinite; }
                         </style>
-                        <svg class="nav-icon ocr-spinner" style="width: 32px; height: 32px; margin-bottom: 1rem; stroke: var(--accent);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="4.93" x2="19.07" y2="7.76"></line></svg>
+                        <svg class="nav-icon ocr-spinner" style="width: 32px; height: 32px; margin-bottom: 1rem; stroke: var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="4.93" x2="19.07" y2="7.76"></line></svg>
                         <strong x-text="ocrStatus" style="font-size: 1.1rem;"></strong>
                         <span style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">Sker 100% offline via klientens resurser</span>
                     </div>
@@ -1196,8 +1196,8 @@
 
             <!-- Licens & Feedback Panel -->
             <div class="panel" style="margin-top: 2rem; border: 1px solid var(--border); background: rgba(6, 182, 212, 0.02); display: flex; flex-direction: column; gap: 1rem; padding: 1.5rem;">
-                <h3 style="font-size: 1.15rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; color: var(--accent); margin: 0;">
-                    <svg class="nav-icon" style="color: var(--accent);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                <h3 style="font-size: 1.15rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; color: var(--primary); margin: 0;">
+                    <svg class="nav-icon" style="color: var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                     Licens, Beta &amp; Feedback
                 </h3>
                 <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 2rem; align-items: center;">
@@ -1214,7 +1214,7 @@
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 0.75rem; width: 100%;">
                         <!-- Mailto button -->
-                        <a href="mailto:dka120@hotmail.com?subject=Feedback%20LocalLedger%20Beta" class="btn primary" style="background: var(--accent); color: #fff; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-weight: bold; padding: 0.6rem 1rem; border-radius: 6px;">
+                        <a href="mailto:dka120@hotmail.com?subject=Feedback%20LocalLedger%20Beta" class="primary" style="text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
                             Skicka Feedback via E-post
                         </a>

@@ -373,7 +373,7 @@ tr.storno-original .row-list {
 .text-danger { color: var(--danger); text-shadow: 0 0 10px rgba(239, 68, 68, 0.2); }
 
 /* Buttons */
-button {
+button, a.primary {
   background-color: transparent;
   color: var(--text-main);
   border: 1px solid var(--border);
@@ -390,18 +390,16 @@ button:hover {
   background-color: rgba(128, 128, 128, 0.1);
 }
 
-button.primary {
+button.primary, a.primary {
   background-color: var(--primary);
-  color: #fff;
+  color: #000;
   border: none;
   font-weight: 600;
   box-shadow: 0 4px 15px var(--primary-glow);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-[data-theme="dark"] button.primary { color: #000; }
-
-button.primary:hover:not(:disabled) {
+button.primary:hover:not(:disabled), a.primary:hover {
   filter: brightness(1.1);
   transform: translateY(-2px);
   box-shadow: 0 6px 20px var(--primary-glow);
