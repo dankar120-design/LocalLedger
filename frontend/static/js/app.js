@@ -345,6 +345,21 @@ document.addEventListener('alpine:init', () => {
                 hash = hashMeta.getAttribute('content');
             }
             this.eulaStorageKey = `eula_accepted_version_${hash}`;
+
+            // Städa gamla/andra EULA-nycklar (förhindrar ackumulering av särpräglade Sandbox-nycklar)
+            try {
+                const keysToRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith('eula_accepted_version_') && key !== this.eulaStorageKey) {
+                        keysToRemove.push(key);
+                    }
+                }
+                keysToRemove.forEach(k => localStorage.removeItem(k));
+            } catch (e) {
+                console.warn('Failed to clean up stale EULA keys in localStorage:', e);
+            }
+
             this.eulaAcceptedVersion = localStorage.getItem(this.eulaStorageKey) || '';
 
             if (this.eulaAcceptedVersion !== this.currentEulaVersion) {

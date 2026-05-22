@@ -33,6 +33,7 @@ type Server struct {
 	isSandbox    bool
 	shutdownChan chan struct{}
 	shutdownOnce sync.Once
+	workspace    string
 	
 	// Heartbeat watchdog
 	lastPing     time.Time
@@ -94,6 +95,7 @@ func Start(workspace string, port int, isE2E bool, isSandbox bool) (*Server, err
 		isSandbox:    isSandbox,
 		shutdownChan: make(chan struct{}),
 		lastPing:     time.Now(),
+		workspace:    workspace,
 	}
 
 	// 3. Sätt upp routes (Go 1.22+ ServeMux)
@@ -279,10 +281,14 @@ func (s *Server) handleFrontendIndex(w http.ResponseWriter, r *http.Request) {
 	} else {
 		settings, err := s.ledger.GetSettings()
 		var key string
-		if err != nil || (settings.OrgNumber == "" && settings.Name == "") {
-			key = "default_workspace"
+		if err != nil {
+			key = s.workspace
+		} else if settings.OrgNumber != "" {
+			key = settings.OrgNumber
+		} else if settings.Name != "" {
+			key = settings.Name
 		} else {
-			key = settings.OrgNumber + "|" + settings.Name
+			key = s.workspace
 		}
 		hashBytes := sha256.Sum256([]byte(key))
 		workspaceHash = hex.EncodeToString(hashBytes[:])[:16]

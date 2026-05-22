@@ -336,5 +336,10 @@
     <kärna>1. Skapat POST /api/unload och POST /unload i server.go och setup.go med en idempotent 2s shutdown-timer skyddad mot F5-raceconditions genom lastPing-validering. 2. Implementerat workspace-hash i handleFrontendIndex baserad på SQLite company_settings (org_number + name) för full USB-portabilitet av EULA-avtal. 3. Isolerat Sandbox-läge via sessionsbaserad hash för att tvinga fram EULA vid varje nystart.</kärna>
     <motivering>Löser Windows file-lock problem omedelbart vid stängning utan 90s fördröjning, samt isolerar localStorages EULA-tillstånd fullständigt för Sandbox utan att bryta LocalLedgers bärbara och local-first USB-arkitektur.</motivering>
   </record>
+  <record id="EULA_SANDBOX_PORTABILITY_HARDENING_01" kategori="Arkitektur / Säkerhet / UX">
+    <beslut>Härdat EULA-portabilitet, namnbytestolerans, samt städning av föräldralösa Sandbox-nycklar.</beslut>
+    <kärna>1. Förfinat workspaceHash i server.go till att prioritera org_number, falla tillbaka på name, och använda absolutsökväg (s.workspace) för okonfigurerade instanser. 2. Implementerat automatisk localStorage-städning i app.js init() som rensar alla föräldralösa 'eula_accepted_version_'-nycklar utom den aktiva. 3. Lagt till TestWorkspaceHash i server_test.go för komplett verifiering av hashnivåer.</kärna>
+    <motivering>Säkerställer fullständig robusthet för EULA-avtal på USB-enheter. Genom att prioritera org_number tål EULA-tillståndet att användaren ändrar sitt företagsnamn, medan absolutsökvägs-fallback hindrar krockar mellan nyskapade okonfigurerade instanser. Rensningen av localStorage-nycklar förhindrar att gamla tillfälliga Sandbox-nycklar ackumuleras i all oändlighet på värddatorn.</motivering>
+  </record>
 </decision_ledger>
 
