@@ -392,6 +392,10 @@
             fetch('/ping').catch(() => {});
         }, 2000);
 
+        window.addEventListener('beforeunload', () => {
+            navigator.sendBeacon('/unload');
+        });
+
         let recentWorkspaces = [];
 
         // Hämta senast använda workspaces vid start

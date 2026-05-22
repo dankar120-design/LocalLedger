@@ -53,12 +53,55 @@ func StartSetupServer(port int) (string, error) {
 	var pingMu sync.Mutex
 	lastPing = time.Now()
 
+	// Unload-mekanism för Setup Wizard
+	var unloadTimer *time.Timer
+	var unloadMu sync.Mutex
+
 	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+		unloadMu.Lock()
+		if unloadTimer != nil {
+			unloadTimer.Stop()
+			unloadTimer = nil
+			log.Println("[Setup Unload] Active unload timer cancelled on ping.")
+		}
+		unloadMu.Unlock()
+
 		pingMu.Lock()
 		lastPing = time.Now()
 		pingMu.Unlock()
 		w.WriteHeader(http.StatusOK)
 	})
+
+	mux.HandleFunc("/unload", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		pingMu.Lock()
+		idle := time.Since(lastPing)
+		pingMu.Unlock()
+		
+		// Idempotent race-condition-skydd för Setup-navigation
+		if idle < 1*time.Second {
+			log.Printf("[Setup Unload] Ignored unload beacon. lastPing was only %v ago (F5 protection).", idle)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		
+		unloadMu.Lock()
+		if unloadTimer != nil {
+			unloadTimer.Stop()
+		}
+		unloadTimer = time.AfterFunc(2*time.Second, func() {
+			log.Println("[Setup Unload] Unload timer expired. Exiting setup...")
+			errChan <- fmt.Errorf("Setup-fönstret stängdes (unload)")
+		})
+		unloadMu.Unlock()
+		
+		log.Println("[Setup Unload] Unload beacon received. Started 2s shutdown timer.")
+		w.WriteHeader(http.StatusOK)
+	})
+
 	mux.HandleFunc("/api/recent-workspaces", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -99,6 +142,18 @@ func StartSetupServer(port int) (string, error) {
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/" {
+			unloadMu.Lock()
+			if unloadTimer != nil {
+				unloadTimer.Stop()
+				unloadTimer = nil
+				log.Println("[Setup Unload] Active unload timer cancelled on index load.")
+			}
+			unloadMu.Unlock()
+
+			pingMu.Lock()
+			lastPing = time.Now()
+			pingMu.Unlock()
+
 			content, err := frontend.FS.ReadFile("views/setup.html")
 			if err != nil {
 				http.Error(w, "Setup-fil saknas i binären", http.StatusInternalServerError)

@@ -46,7 +46,7 @@ document.addEventListener('alpine:init', () => {
         showTips: true,
         showEulaModal: false,
         isEulaReadOnly: false,
-        eulaAcceptedVersion: localStorage.getItem('eula_accepted_version') || '',
+        eulaAcceptedVersion: '',
         currentEulaVersion: '1.0-beta',
         helpCheckbox1: localStorage.getItem('helpCheckbox1') === 'true',
         helpCheckbox2: localStorage.getItem('helpCheckbox2') === 'true',
@@ -337,6 +337,15 @@ document.addEventListener('alpine:init', () => {
             } else {
                 this.showToast('Authentication token missing!', 'error');
             }
+
+            // Läs workspace-hash för att isolera EULA per arbetsyta och i Sandbox
+            const hashMeta = document.querySelector('meta[name="workspace-hash"]');
+            let hash = 'default';
+            if (hashMeta) {
+                hash = hashMeta.getAttribute('content');
+            }
+            this.eulaStorageKey = `eula_accepted_version_${hash}`;
+            this.eulaAcceptedVersion = localStorage.getItem(this.eulaStorageKey) || '';
 
             if (this.eulaAcceptedVersion !== this.currentEulaVersion) {
                 this.showEulaModal = true;
@@ -2052,7 +2061,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         acceptEula() {
-            localStorage.setItem('eula_accepted_version', this.currentEulaVersion);
+            localStorage.setItem(this.eulaStorageKey, this.currentEulaVersion);
             this.eulaAcceptedVersion = this.currentEulaVersion;
             this.showEulaModal = false;
             this.showToast('EULA-avtalet har godkänts!', 'success');

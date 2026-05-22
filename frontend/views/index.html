@@ -18,6 +18,7 @@
 
     <!-- Säker DOM-injektion från servern -->
     <meta name="api-token" content="{{.Token}}">
+    <meta name="workspace-hash" content="{{.WorkspaceHash}}">
     
     <!-- FOUC Preventer -->
     <script>document.documentElement.dataset.theme = localStorage.getItem('theme') || 'dark';</script>
@@ -1929,7 +1930,7 @@
             }
         });
         window.addEventListener('beforeunload', () => {
-            navigator.sendBeacon('/api/ping');
+            navigator.sendBeacon('/api/unload');
         });
         startPing();
     </script>

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -36,6 +37,10 @@ type Server struct {
 	// Heartbeat watchdog
 	lastPing     time.Time
 	pingMu       sync.Mutex
+
+	// Unload beacon shutdown timer
+	unloadTimer  *time.Timer
+	unloadMu     sync.Mutex
 }
 
 // GenerateToken skapar en slumpmässig 32-byte hex sträng.
@@ -97,6 +102,7 @@ func Start(workspace string, port int, isE2E bool, isSandbox bool) (*Server, err
 	mux.HandleFunc("POST /api/shutdown", s.handleShutdown)
 	mux.HandleFunc("GET /api/ping", s.handlePing)
 	mux.HandleFunc("POST /api/ping", s.handlePing)
+	mux.HandleFunc("POST /api/unload", s.handleUnload)
 	s.registerRoutes(mux)
 
 	// Frontend routes
@@ -211,6 +217,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			!strings.HasPrefix(r.URL.Path, "/api/reports/samlingsplan") && 
 			!strings.HasPrefix(r.URL.Path, "/api/reports/excel") &&
 			r.URL.Path != "/api/ping" &&
+			r.URL.Path != "/api/unload" &&
 			!(r.Method == "GET" && r.URL.Path == "/api/settings/logo") {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
@@ -243,19 +250,52 @@ func (s *Server) handleShutdown(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
-// handleFrontendIndex serverar index.html och injicerar API-token
+// handleFrontendIndex serverar index.html och injicerar API-token samt workspaceHash
 func (s *Server) handleFrontendIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
 	}
 
+	// Avbryt en eventuellt aktiv unload-timer direkt
+	s.unloadMu.Lock()
+	if s.unloadTimer != nil {
+		s.unloadTimer.Stop()
+		s.unloadTimer = nil
+		log.Println("[Unload] Active unload timer cancelled on index page load.")
+	}
+	s.unloadMu.Unlock()
+
+	// Uppdatera lastPing omedelbart för att förhindra F5 race-conditions
+	s.pingMu.Lock()
+	s.lastPing = time.Now()
+	s.pingMu.Unlock()
+
+	var workspaceHash string
+	if s.isSandbox {
+		// För sandbox vill vi tvinga EULA-prompt varje ny session (databasen är ny)
+		hashBytes := sha256.Sum256([]byte(s.token + "_sandbox"))
+		workspaceHash = hex.EncodeToString(hashBytes[:])[:16]
+	} else {
+		settings, err := s.ledger.GetSettings()
+		var key string
+		if err != nil || (settings.OrgNumber == "" && settings.Name == "") {
+			key = "default_workspace"
+		} else {
+			key = settings.OrgNumber + "|" + settings.Name
+		}
+		hashBytes := sha256.Sum256([]byte(key))
+		workspaceHash = hex.EncodeToString(hashBytes[:])[:16]
+	}
+
 	data := struct {
-		Token     string
-		IsSandbox bool
+		Token         string
+		IsSandbox     bool
+		WorkspaceHash string
 	}{
-		Token:     s.token,
-		IsSandbox: s.isSandbox,
+		Token:         s.token,
+		IsSandbox:     s.isSandbox,
+		WorkspaceHash: workspaceHash,
 	}
 
 	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
@@ -288,6 +328,14 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // handlePing hanterar keep-alive pings från frontenden.
 func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {
+	s.unloadMu.Lock()
+	if s.unloadTimer != nil {
+		s.unloadTimer.Stop()
+		s.unloadTimer = nil
+		log.Println("[Unload] Active unload timer cancelled on ping.")
+	}
+	s.unloadMu.Unlock()
+
 	s.pingMu.Lock()
 	s.lastPing = time.Now()
 	s.pingMu.Unlock()
@@ -295,6 +343,44 @@ func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status":"pong"}`))
+}
+
+// handleUnload hanterar unload beacon från frontenden för att starta snabblåsning av processen
+func (s *Server) handleUnload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	s.pingMu.Lock()
+	idleTime := time.Since(s.lastPing)
+	s.pingMu.Unlock()
+
+	// Idempotent race-condition-skydd för F5-navigeringar
+	if idleTime < 1*time.Second {
+		log.Printf("[Unload] Unload beacon received but ignored. lastPing was only %v ago (F5 navigation protection).", idleTime)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ignored"}`))
+		return
+	}
+
+	s.unloadMu.Lock()
+	if s.unloadTimer != nil {
+		s.unloadTimer.Stop()
+	}
+	s.unloadTimer = time.AfterFunc(2*time.Second, func() {
+		log.Println("[Unload] Unload timer expired. Initiating auto-shutdown...")
+		s.shutdownOnce.Do(func() {
+			close(s.shutdownChan)
+		})
+	})
+	s.unloadMu.Unlock()
+
+	log.Println("[Unload] Unload beacon received. Started 2s shutdown timer.")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"timer_started"}`))
 }
 
 
