@@ -49,8 +49,84 @@
       x-init="theme = 'dark'; localStorage.setItem('theme', 'dark'); $watch('theme', val => { if(val !== 'dark') { theme = 'dark'; localStorage.setItem('theme', 'dark'); } })"
       @cmd-nav.window="showView($event.detail)"
       @cmd-action.window="handleCmdAction($event.detail)">
+    <!-- Forced Clickwrap EULA Modal -->
+    <div x-show="showEulaModal" 
+         @keydown.escape.window="if (showEulaModal && isEulaReadOnly) showEulaModal = false"
+         style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 99999;" 
+         x-cloak>
+        <div class="panel" style="max-width: 700px; width: 90%; max-height: 85vh; border: 1px solid var(--border); box-shadow: 0 25px 50px rgba(0,0,0,0.6); display: flex; flex-direction: column; padding: 2rem;">
+            <h2 style="color: var(--accent); display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; margin-top: 0;">
+                <svg class="nav-icon" style="color: var(--accent); width: 24px; height: 24px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                Slutanvändaravtal (EULA) &mdash; LocalLedger
+            </h2>
+            <p style="color: var(--text-main); font-size: 0.95rem; margin-bottom: 1rem; line-height: 1.5;"
+               x-text="isEulaReadOnly ? 'Här kan du läsa igenom gällande licensvillkor för LocalLedger.' : 'Välkommen till beta-testningen av LocalLedger. För att kunna starta och använda applikationen måste du läsa och godkänna följande licensvillkor.'">
+            </p>
+            
+            <!-- EULA Scrollable Text Container -->
+            <div style="flex: 1; overflow-y: auto; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; padding: 1.25rem; margin-bottom: 1.5rem; font-size: 0.85rem; color: var(--text-muted); line-height: 1.6;">
+                <h3 style="color: var(--text-main); margin-top: 0; margin-bottom: 0.5rem;">1. PARTER & SYFTE</h3>
+                <p style="margin-bottom: 1rem;">
+                    Detta slutanvändaravtal ("EULA") är ett juridiskt bindande avtal mellan dig ("Användaren") och Daniel Karlsson ("Licensgivaren"), avseende användning av programvaran LocalLedger ("Programvaran"). Programvaran tillhandahålls som en kostnadsfri betaversion för utvärdering och testning.
+                </p>
+                
+                <h3 style="color: var(--text-main); margin-top: 1rem; margin-bottom: 0.5rem;">2. IMMATERIELLA RÄTTIGHETER (IP)</h3>
+                <p style="margin-bottom: 1rem;">
+                    All källkod, databasstruktur, koncept, designelement, logotyper, algoritmer samt övrigt material relaterat till Programvaran ägs exklusivt av Daniel Karlsson. Programvaran licensieras, säljs inte. 
+                </p>
+                <p style="margin-bottom: 1rem; color: var(--text-main); font-weight: 600;">
+                    Det är strikt förbjudet att:
+                </p>
+                <ul style="margin-bottom: 1rem; padding-left: 1.25rem;">
+                    <li>Helt eller delvis kopiera, modifiera eller distribuera Programvarans kod eller design.</li>
+                    <li>Dekompilera, bakåtutveckla (reverse engineer) eller på annat sätt försöka härleda källkoden till Programvaran.</li>
+                    <li>Sälja, hyra ut, underlicensiera eller paketera om Programvaran under eget eller tredjeparts varumärke (s.k. white-labeling).</li>
+                </ul>
+
+                <h3 style="color: var(--text-main); margin-top: 1rem; margin-bottom: 0.5rem;">3. ANSVARSBEGRÄNSNING (AS-IS)</h3>
+                <p style="margin-bottom: 1rem; color: var(--warning); font-weight: bold;">
+                    PROGRAMVARAN TILLHANDAHÅLLS I BEFINTLIGT SKICK ("AS-IS") UTAN NÅGRA GARANTIER AV NÅGOT SLAG, UTTRYCKLIGA ELLER UNDERFÖRSTÅDDA.
+                </p>
+                <p style="margin-bottom: 1rem;">
+                    Licensgivaren ansvarar under inga omständigheter för direkta eller indirekta skador, inklusive men inte begränsat till: bokföringsfel, felaktiga deklarationer, utebliven vinst, dataförlust (inklusive SQLite-filer) eller andra finansiella eller driftsmässiga störningar som kan uppstå vid användning av Programvaran. 
+                </p>
+                <p style="margin-bottom: 1rem;">
+                    Det är Användarens fulla ansvar att granska och verifiera att bokföringen och momsredovisningen sker i enlighet med svensk Bokföringslag (BFL) samt Skatteverkets regelverk.
+                </p>
+
+                <h3 style="color: var(--text-main); margin-top: 1rem; margin-bottom: 0.5rem;">4. DATASKYDD & INTEGRITET (LOCAL-FIRST)</h3>
+                <p style="margin-bottom: 1rem;">
+                    Programvaran är uppbyggd enligt principen "local-first". All finansiell data, verifikationer, kvitton och kunduppgifter lagras uteslutande lokalt på Användarens hårddisk eller anslutna lagringsenhet (t.ex. USB-minne). 
+                </p>
+                <p style="margin-bottom: 1rem;">
+                    Ingen data skickas till Licensgivaren eller någon extern molntjänst (med undantag för om Användaren explicit väljer att konfigurera molnsynk för kvitton till en egen molnkatalog). Licensgivaren samlar inte in någon telemetri eller personuppgifter från Programvaran.
+                </p>
+
+                <h3 style="color: var(--text-main); margin-top: 1rem; margin-bottom: 0.5rem;">5. FEEDBACK</h3>
+                <p style="margin-bottom: 1rem;">
+                    Eventuell feedback, felrapporter eller förslag som lämnas av Användaren till Licensgivaren sker helt frivilligt och utan krav på kompensation. Licensgivaren har rätt att fritt använda, implementera och vidareutveckla Programvaran baserat på sådan feedback utan att Användaren erhåller några rättigheter till Programvaran eller framtida versioner.
+                </p>
+
+                <h3 style="color: var(--text-main); margin-top: 1rem; margin-bottom: 0.5rem;">6. UPPSÄGNING & ÄNDRINGAR</h3>
+                <p style="margin-bottom: 0;">
+                    Licensgivaren förbehåller sig rätten att när som helst och utan förvarning återkalla beta-licensen eller modifiera villkoren i detta avtal. Vid uppsägning upphör Användarens rätt att köra Programvaran omedelbart.
+                </p>
+            </div>
+            
+            <!-- Actions -->
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; padding-top: 1rem; border-top: 1px solid var(--border);">
+                <button x-show="isEulaReadOnly" class="btn" style="border: 1px solid var(--border); background: rgba(255,255,255,0.02); color: var(--text-main); padding: 0.75rem 1.5rem; font-weight: bold; cursor: pointer; border-radius: 6px;" @click="showEulaModal = false">
+                    Stäng
+                </button>
+                <button x-show="!isEulaReadOnly" class="primary" style="background: var(--accent); box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3); font-weight: bold; padding: 0.75rem 1.5rem;" @click="acceptEula()">
+                    Jag godkänner EULA-avtalet
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" x-bind:inert="showEulaModal && !isEulaReadOnly">
         <!-- Logo Area with dynamic upload support & fallback -->
         <div class="logo" style="display: flex; align-items: center; gap: 0.75rem; padding: 1.5rem 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem;">
             <template x-if="settings.logo_path">
@@ -110,7 +186,7 @@
     </aside>
 
     <!-- Main Content -->
-    <main class="main-content" :class="showInspector ? 'inspector-open' : ''">
+    <main class="main-content" :class="showInspector ? 'inspector-open' : ''" x-bind:inert="showEulaModal && !isEulaReadOnly">
         <datalist id="bas-accounts">
             <template x-for="acc in basAccounts" :key="acc.code">
                 <option :value="acc.code" x-text="acc.code + ' - ' + acc.name"></option>
@@ -1113,6 +1189,46 @@
                                     <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem;">Ladda ner en fullständig krypterad eller okrypterad backup (.zip) under <a href="#" @click.prevent="showView('verktyg')" style="color: var(--primary); text-decoration: none;">Verktyg</a>.</p>
                                 </div>
                             </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Licens & Feedback Panel -->
+            <div class="panel" style="margin-top: 2rem; border: 1px solid var(--border); background: rgba(6, 182, 212, 0.02); display: flex; flex-direction: column; gap: 1rem; padding: 1.5rem;">
+                <h3 style="font-size: 1.15rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; color: var(--accent); margin: 0;">
+                    <svg class="nav-icon" style="color: var(--accent);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    Licens, Beta &amp; Feedback
+                </h3>
+                <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 2rem; align-items: center;">
+                    <div style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.5; display: flex; flex-direction: column; gap: 0.75rem;">
+                        <p style="margin: 0;">
+                            LocalLedger utvecklas som en helt local-first, integritetssäker och WORM-förseglad bokföringsmotor av <strong>Daniel Karlsson</strong>.
+                        </p>
+                        <p style="margin: 0;">
+                            Eftersom Programvaran körs helt offline sparas inga uppgifter i molnet och ingen telemetri samlas in. Om du upptäcker en bugg, har förslag på förbättringar eller vill ställa frågor, kan du skicka feedback direkt till utvecklaren.
+                        </p>
+                        <p style="margin: 0; font-size: 0.85rem; font-style: italic;">
+                            Gällande licensavtal: <strong>LocalLedger EULA v1.0-beta</strong>.
+                        </p>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem; width: 100%;">
+                        <!-- Mailto button -->
+                        <a href="mailto:dka120@hotmail.com?subject=Feedback%20LocalLedger%20Beta" class="btn primary" style="background: var(--accent); color: #fff; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-weight: bold; padding: 0.6rem 1rem; border-radius: 6px;">
+                            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                            Skicka Feedback via E-post
+                        </a>
+                        <div style="display: flex; gap: 0.5rem; width: 100%;">
+                            <!-- Copy email fallback button -->
+                            <button @click="copyEmailFallback()" class="btn" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.4rem; font-size: 0.85rem; padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: rgba(255,255,255,0.02); color: var(--text-main); cursor: pointer;">
+                                <svg class="nav-icon" style="width: 16px; height: 16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                Kopiera e-post
+                            </button>
+                            <!-- Re-read EULA button -->
+                            <button @click="showEulaModal = true; isEulaReadOnly = true" class="btn" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.4rem; font-size: 0.85rem; padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: rgba(255,255,255,0.02); color: var(--text-main); cursor: pointer;">
+                                <svg class="nav-icon" style="width: 16px; height: 16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                Visa Licensavtal (EULA)
+                            </button>
                         </div>
                     </div>
                 </div>

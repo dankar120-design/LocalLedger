@@ -158,6 +158,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Global Keydown
     document.addEventListener('keydown', (e) => {
+        // Blockera om EULA-modalen visas
+        const eulaModal = document.querySelector('[x-show="showEulaModal"]');
+        if (eulaModal && eulaModal.style.display !== 'none') {
+            return;
+        }
+
         // Kolla efter Ctrl+K eller Cmd+K
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
             e.preventDefault(); // Hindra webbläsarens standardsökning

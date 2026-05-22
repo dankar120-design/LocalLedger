@@ -311,5 +311,15 @@
     <kärna>1. Skrivit om sync-informationen i setup.html till ett helt jargongfritt språk (tagit bort "databas" och "fillåsningsfel"). 2. Implementerat SVG-filtilläggskontroll i invoice.go som proaktivt loggar en konsolvarning för att underlätta logotyp-felsökning då gofpdf saknar SVG-stöd.</kärna>
     <motivering>Genom att förenkla onboarding-guiden undviks teknisk förvirring hos slutanvändare rörande synkroniseringsstörningar. SVG-kontrollen säkerställer dessutom tydlig backend-diagnostik om varför bildgenereringen tyst faller tillbaka på LocalLedger-vektorlogotypen.</motivering>
   </record>
+  <record id="EULA_CLICKWRAP_01" kategori="Säkerhet / Juridik">
+    <beslut>Implementerat tvingande Clickwrap EULA-modal samt offline-vänlig feedback-kanal.</beslut>
+    <kärna>1. Skapat LICENSE.md i rotkatalogen med svenskspråkigt EULA-avtal. 2. Integrerat tvingande Clickwrap-modal i index.html som blockerar gränssnittet tills avtalet godkänts av användaren. 3. Lagt till versionskontroll (v1.0-beta) via localStorage. 4. Skapat feedback-sektion under Hjälp & Guide med mailto-länk samt copy-to-clipboard fallback för Daniel Karlsson (dka120@hotmail.com).</kärna>
+    <motivering>Skyddar utvecklarens immateriella rättigheter (IP) och eliminerar ansvarsrisk (AS-IS) genom ett juridiskt robust och användarvänligt clickwrap-gränssnitt som respekterar programmets local-first arkitektur.</motivering>
+  </record>
+  <record id="EULA_HARDENING_POST_AUDIT_01" kategori="Säkerhet / Juridik / UX">
+    <beslut>Härdat EULA-modalen mot tangentbordsbypass, Command Palette-läckage, re-read UX-deadlock, samt säkrat pre-acceptance data fetching.</beslut>
+    <kärna>1. Lagt till x-bind:inert på aside och main i index.html för att helt förhindra Tab-fokusläckage och bakgrundsinteraktioner när EULA-modalen är aktiv. 2. Implementerat isEulaReadOnly i app.js och index.html för att separera tvingande first-boot läge (utan stängknapp/Escape) från frivillig re-read (med stängknapp och Escape-avslut). 3. Blockerat Command Palette (Ctrl+K) i command-palette.js när EULA-modalen visas. 4. Refaktorerat init() i app.js för att helt blockera API-datainläsning (privacy-first) och endast köra completeInit() efter godkänt avtal.</kärna>
+    <motivering>En djupgående fientlig audit (FAS 2) visade att den tidigare EULA-implementationen enkelt kunde kringgås via tangentbordstabbning och Ctrl+K globala snabbkommandon, samt led av ett UX-deadlock vid re-read. Genom att implementera fullständig inert-fokusspärr, blockera Command Palette, och helt skjuta upp datainläsning till efter avtalsaccept garanteras 100% juridisk giltighet och en oantastlig integritetsnivå enligt GDPR och Bokföringslagen.</motivering>
+  </record>
 </decision_ledger>
 

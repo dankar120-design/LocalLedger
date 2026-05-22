@@ -44,6 +44,10 @@ document.addEventListener('alpine:init', () => {
         armedActionId: null,
         invoiceAbortController: null,
         showTips: true,
+        showEulaModal: false,
+        isEulaReadOnly: false,
+        eulaAcceptedVersion: localStorage.getItem('eula_accepted_version') || '',
+        currentEulaVersion: '1.0-beta',
         helpCheckbox1: localStorage.getItem('helpCheckbox1') === 'true',
         helpCheckbox2: localStorage.getItem('helpCheckbox2') === 'true',
         helpCheckbox3: localStorage.getItem('helpCheckbox3') === 'true',
@@ -334,16 +338,12 @@ document.addEventListener('alpine:init', () => {
                 this.showToast('Authentication token missing!', 'error');
             }
 
-            await this.fetchFiscalYears();
-            this.syncFormDateWithFiscalYear();
-            this.fetchAccounts();
-            this.fetchVerifications();
-            this.fetchDashboardData();
-            this.fetchSettings();
-            this.runVerification();
-            this.fetchInbox();
-            this.loadInvoices();
-            this.fetchCustomers();
+            if (this.eulaAcceptedVersion !== this.currentEulaVersion) {
+                this.showEulaModal = true;
+                this.isEulaReadOnly = false;
+            } else {
+                await this.completeInit();
+            }
 
             // Command Palette SPA Routing Hook
             setTimeout(() => {
@@ -2049,6 +2049,32 @@ document.addEventListener('alpine:init', () => {
             this.bugLog = [];
             this.showBugLogger = false;
             this.showToast('Logg rensad', 'success');
+        },
+
+        acceptEula() {
+            localStorage.setItem('eula_accepted_version', this.currentEulaVersion);
+            this.eulaAcceptedVersion = this.currentEulaVersion;
+            this.showEulaModal = false;
+            this.showToast('EULA-avtalet har godkänts!', 'success');
+            this.completeInit();
+        },
+
+        async completeInit() {
+            await this.fetchFiscalYears();
+            this.syncFormDateWithFiscalYear();
+            this.fetchAccounts();
+            this.fetchVerifications();
+            this.fetchDashboardData();
+            this.fetchSettings();
+            this.runVerification();
+            this.fetchInbox();
+            this.loadInvoices();
+            this.fetchCustomers();
+        },
+
+        copyEmailFallback() {
+            navigator.clipboard.writeText('dka120@hotmail.com');
+            this.showToast('E-postadressen dka120@hotmail.com har kopierats till urklipp!', 'success');
         }
     }));
 
