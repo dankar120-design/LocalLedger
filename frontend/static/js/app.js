@@ -38,6 +38,11 @@ document.addEventListener('alpine:init', () => {
         restorePassword: '',
         restoreFileToUpload: null,
         isRestoring: false,
+        showSiePreviewModal: false,
+        siePreview: null,
+        sieFileToImport: null,
+        sieYearToImport: null,
+        isUploadingSie: false,
         showBugLogger: false,
         isSealing: false,
         bugLog: [],
@@ -282,6 +287,10 @@ document.addEventListener('alpine:init', () => {
 
         get activeFiscalYear() {
             return this.fiscalYears.find(f => f.id == this.activeFiscalYearId);
+        },
+
+        get activeYearID() {
+            return this.activeFiscalYearId;
         },
 
 
@@ -1461,19 +1470,55 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-	        async uploadSIEFile(event) {
+        async uploadSIEFile(event) {
             const files = event.target.files;
             if (!files || files.length === 0) return;
             const file = files[0];
 
-            if (!await this.confirmAction(`Är du säker på att du vill importera ${file.name} till det aktiva räkenskapsåret?`, 'Importera SIE', 'Importera', true)) {
-                event.target.value = '';
-                return;
-            }
+            this.sieFileToImport = file;
+            this.sieYearToImport = this.activeFiscalYearId;
+
+            this.isUploadingSie = true;
+            this.showToast('Analyserar SIE-fil...', 'info');
 
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('yearID', this.activeYearID);
+            formData.append('yearID', this.sieYearToImport);
+            formData.append('dry_run', 'true');
+
+            try {
+                const res = await fetch('/api/import/sie4?dry_run=true', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${this.token}` },
+                    body: formData
+                });
+                
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error);
+                }
+                
+                this.siePreview = await res.json();
+                this.showSiePreviewModal = true;
+            } catch(e) {
+                this.showToast('Analys misslyckades: ' + e.message, 'error');
+                this.sieFileToImport = null;
+                this.sieYearToImport = null;
+            } finally {
+                this.isUploadingSie = false;
+                event.target.value = '';
+            }
+        },
+
+        async confirmImportSie() {
+            if (!this.sieFileToImport || !this.sieYearToImport) return;
+
+            this.isUploadingSie = true;
+            this.showToast('Importerar verifikationer...', 'info');
+
+            const formData = new FormData();
+            formData.append('file', this.sieFileToImport);
+            formData.append('yearID', this.sieYearToImport);
 
             try {
                 const res = await fetch('/api/import/sie4', {
@@ -1488,11 +1533,16 @@ document.addEventListener('alpine:init', () => {
                 }
                 
                 this.showToast('SIE-fil importerad framgångsrikt!', 'success');
+                this.showSiePreviewModal = false;
+                this.siePreview = null;
+                this.sieFileToImport = null;
+                this.sieYearToImport = null;
                 await this.refreshAllData();
             } catch(e) {
                 this.showToast('Import misslyckades: ' + e.message, 'error');
+            } finally {
+                this.isUploadingSie = false;
             }
-            event.target.value = '';
         },
 
         async generateIB() {
@@ -1971,6 +2021,14 @@ document.addEventListener('alpine:init', () => {
             const fy = this.activeFiscalYear;
             if (fy && (this.form.date < fy.start_date || this.form.date > fy.end_date)) {
                 this.formDateError = 'Datumet ligger utanför det aktiva räkenskapsåret';
+                this.showToast(this.formDateError, 'error');
+                this.$nextTick(() => {
+                    const dateInput = document.getElementById('post-date-input');
+                    if (dateInput) {
+                        dateInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        dateInput.focus();
+                    }
+                });
                 return;
             }
             this.formDateError = '';

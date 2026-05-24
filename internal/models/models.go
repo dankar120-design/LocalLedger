@@ -1,9 +1,10 @@
 package models
 
 type Account struct {
-	Code string `json:"code"`
-	Name string `json:"name"`
-	Type string `json:"type"`
+	Code    string `json:"code"`
+	Name    string `json:"name"`
+	Type    string `json:"type"`
+	SRUCode string `json:"sru_code,omitempty"`
 }
 
 type VerificationRequest struct {
@@ -136,4 +137,11 @@ type DashboardMetrics struct {
 	Expenses               int64 `json:"expenses"`               // Endast kostnader för presentation
 	OutstandingReceivables int64 `json:"outstanding_receivables"` // Utestående kundfordringar i öre
 	UnpaidCount            int   `json:"unpaid_count"`            // Antal obetalda bokförda fakturor
+}
+
+type ReconciliationMatch struct {
+	Invoice      Invoice              `json:"invoice"`
+	Verification VerificationResponse `json:"verification"`
+	Confidence   string               `json:"confidence"` // "HIGH", "MEDIUM", "LOW"
+	Reason       string               `json:"reason"`
 }

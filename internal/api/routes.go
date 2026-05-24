@@ -44,6 +44,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/settings/logo", s.handleServeLogo)
 	mux.HandleFunc("POST /api/accounts", s.handleAddAccount)
 	mux.HandleFunc("GET /api/export/sie4", s.handleExportSIE4)
+	mux.HandleFunc("GET /api/export/sru", s.handleExportSRU)
+	mux.HandleFunc("GET /api/reconciliation/match", s.handleGetReconciliationMatches)
 	mux.HandleFunc("POST /api/export/backup", s.handleExportBackup)
 	mux.HandleFunc("POST /api/import/backup", s.handleRestoreBackup)
 	mux.HandleFunc("GET /api/vat-report", s.handleGetVatReport)
@@ -626,6 +628,8 @@ func (s *Server) handleExportSIE4(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleImportSIE4(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 20*1024*1024)
+
 	user := "API User"
 
 	// Läs yearID från form-data eller query
@@ -656,6 +660,24 @@ func (s *Server) handleImportSIE4(w http.ResponseWriter, r *http.Request) {
 	fileBytes, err := io.ReadAll(file)
 	if err != nil {
 		writeError(w, fmt.Errorf("failed to read file: %w", err))
+		return
+	}
+
+	dryRunStr := r.URL.Query().Get("dry_run")
+	if dryRunStr == "" {
+		dryRunStr = r.FormValue("dry_run")
+	}
+	isDryRun := (dryRunStr == "true")
+
+	if isDryRun {
+		preview, err := s.ledger.PreviewSIE4(yearID, fileBytes)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(preview)
 		return
 	}
 

@@ -34,9 +34,10 @@
     
     <style>
         @media print {
+            body { height: auto !important; overflow: visible !important; display: block !important; }
             .sidebar, .header, nav, .status-badge { display: none !important; }
-            .main-content { margin-left: 0 !important; width: 100% !important; padding: 0 !important; }
-            #printable-report { display: block !important; width: 100% !important; }
+            .main-content { margin-left: 0 !important; width: 100% !important; padding: 0 !important; overflow: visible !important; height: auto !important; }
+            #printable-report { display: block !important; width: 100% !important; max-width: none !important; margin: 0 !important; }
             .print-controls { display: none !important; }
         }
     </style>
@@ -410,7 +411,7 @@
             <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1rem; margin-bottom: 1.5rem;">
                 <div class="form-group">
                     <label>Datum <span class="form-tip-indicator" x-show="showTips" data-tip="Bokföringsdatumet för verifikationen. Måste ligga inom det aktiva räkenskapsåret.">?</span></label>
-                    <input type="date" x-model="form.date" :min="activeFiscalYear?.start_date" :max="activeFiscalYear?.end_date" class="numpad-nav" @keydown.enter.prevent="focusNext($event)" @input="formDateError = ''" autofocus>
+                    <input type="date" id="post-date-input" x-model="form.date" :min="activeFiscalYear?.start_date" :max="activeFiscalYear?.end_date" :class="formDateError ? 'numpad-nav input-error' : 'numpad-nav'" @keydown.enter.prevent="focusNext($event)" @input="formDateError = ''" autofocus>
                     <div x-show="formDateError" x-text="formDateError" style="color: var(--danger); font-size: 0.8rem; margin-top: 0.25rem;"></div>
                 </div>
                 <div class="form-group">
@@ -1761,10 +1762,163 @@
                     </div>
                 </div>
             </div>
+
+            <!-- SIE Preview Modal (toolsApp scope) -->
+            <div x-show="showSiePreviewModal" @keydown.escape.window="if(showSiePreviewModal && !isUploadingSie) { showSiePreviewModal = false; siePreview = null; }" tabindex="-1" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 9999;" x-cloak>
+                <div class="panel sie-preview-modal-container" style="max-width: 650px; width: 100%; border: 1px solid var(--primary); box-shadow: 0 20px 40px rgba(0,0,0,0.5); background: rgba(30, 41, 59, 0.75); backdrop-filter: blur(16px); border-radius: 16px; padding: 2rem; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; font-family: 'Outfit', sans-serif;">
+                    
+                    <!-- Header -->
+                    <div class="sie-preview-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem; flex-shrink: 0;">
+                        <h2 style="color: var(--primary); margin: 0; font-size: 1.4rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+                            <svg class="nav-icon" style="color: var(--primary); width: 24px; height: 24px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                            Förhandsgranska SIE-import
+                        </h2>
+                        <button @click="showSiePreviewModal = false; siePreview = null;" class="icon-btn" style="color: var(--text-muted); cursor: pointer; border: none; background: transparent; padding: 4px;">
+                            <svg style="width: 20px; height: 20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                    </div>
+
+                    <!-- Modal Body (Scrollable) -->
+                    <div style="flex-grow: 1; overflow-y: auto; padding-right: 8px; margin-bottom: 1.5rem;">
+                        <template x-if="siePreview">
+                            <div>
+                                <!-- File Metadata Grid -->
+                                <div class="sie-preview-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                                    <div class="sie-preview-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem;">
+                                        <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Källa / Program</span>
+                                        <strong style="color: var(--text-main); font-size: 0.9rem;" x-text="siePreview.program || 'Okänd'"></strong>
+                                    </div>
+                                    <div class="sie-preview-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem;">
+                                        <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Företag i filen</span>
+                                        <strong style="color: var(--text-main); font-size: 0.9rem;" x-text="siePreview.company_name || 'Okänt'"></strong>
+                                    </div>
+                                    <div class="sie-preview-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem;">
+                                        <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Organisationsnummer</span>
+                                        <strong style="color: var(--text-main); font-size: 0.9rem;" x-text="siePreview.org_number || 'Okänt'"></strong>
+                                    </div>
+                                    <div class="sie-preview-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem;">
+                                        <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Teckenkodning</span>
+                                        <strong style="color: var(--primary); font-size: 0.9rem; display: flex; align-items: center; gap: 0.25rem;">
+                                            <span x-text="siePreview.encoding_detected"></span>
+                                            <span x-show="siePreview.encoding_detected === 'UTF-8'" style="font-size: 0.7rem; background: rgba(59,130,246,0.15); padding: 1px 4px; border-radius: 4px;">Smart Fallback</span>
+                                        </strong>
+                                    </div>
+                                </div>
+
+                                <!-- Validation Checklist -->
+                                <h3 style="font-size: 0.95rem; font-weight: bold; margin-bottom: 0.75rem; color: var(--text-main);">Valideringskontroller</h3>
+                                <div class="sie-preview-checklist" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem; background: rgba(0,0,0,0.15); padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
+                                    <!-- 1. Fiscal Year Match -->
+                                    <div class="sie-preview-checklist-item" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+                                        <template x-if="siePreview.fiscal_year_match">
+                                            <svg style="color: var(--success); width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                        </template>
+                                        <template x-if="!siePreview.fiscal_year_match">
+                                            <svg style="color: var(--danger); width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                        </template>
+                                        <span style="color: var(--text);" x-text="'Räkenskapsår matchar (' + siePreview.file_rar_start + ' till ' + siePreview.file_rar_end + ')'"></span>
+                                    </div>
+
+                                    <!-- 2. Tomt år -->
+                                    <div class="sie-preview-checklist-item" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+                                        <template x-if="siePreview.is_empty_year">
+                                            <svg style="color: var(--success); width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                        </template>
+                                        <template x-if="!siePreview.is_empty_year">
+                                            <svg style="color: var(--danger); width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                        </template>
+                                        <span style="color: var(--text);">Målåret i LocalLedger är helt tomt</span>
+                                    </div>
+
+                                    <!-- 3. Periodlås -->
+                                    <div class="sie-preview-checklist-item" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+                                        <template x-if="siePreview.no_period_locks">
+                                            <svg style="color: var(--success); width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                        </template>
+                                        <template x-if="!siePreview.no_period_locks">
+                                            <svg style="color: var(--danger); width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                        </template>
+                                        <span style="color: var(--text);">Inga låsta perioder i målåret</span>
+                                    </div>
+
+                                    <!-- 4. Dubbel bokföringsbalans -->
+                                    <div class="sie-preview-checklist-item" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+                                        <template x-if="siePreview.is_valid && (siePreview.total_debet_ore === siePreview.total_kredit_ore)">
+                                            <svg style="color: var(--success); width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                        </template>
+                                        <template x-if="!siePreview.is_valid || (siePreview.total_debet_ore !== siePreview.total_kredit_ore)">
+                                            <svg style="color: var(--danger); width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                        </template>
+                                        <span style="color: var(--text);" x-text="'Alla verifikationer balanserar (Totalt: ' + (siePreview.total_debet_ore / 100).toFixed(2) + ' kr)'"></span>
+                                    </div>
+                                </div>
+
+                                <!-- Validation Errors -->
+                                <template x-if="siePreview.errors.length > 0">
+                                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+                                        <h4 style="color: var(--danger); margin: 0 0 0.5rem 0; font-size: 0.9rem; font-weight: bold; display: flex; align-items: center; gap: 0.4rem;">
+                                            <svg class="nav-icon" style="color: var(--danger); width: 16px; height: 16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                                            Importen är blockerad på grund av valideringsfel:
+                                        </h4>
+                                        <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.85rem; color: #fca5a5; line-height: 1.4;">
+                                            <template x-for="err in siePreview.errors">
+                                                <li x-text="err" style="margin-bottom: 0.25rem;"></li>
+                                            </template>
+                                        </ul>
+                                    </div>
+                                </template>
+
+                                <!-- Warnings (New accounts) -->
+                                <template x-if="siePreview.warnings.length > 0">
+                                    <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+                                        <h4 style="color: var(--warning); margin: 0 0 0.5rem 0; font-size: 0.9rem; font-weight: bold; display: flex; align-items: center; gap: 0.4rem;">
+                                            <svg class="nav-icon" style="color: var(--warning); width: 16px; height: 16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
+                                            Uppmärksamhet krävs (Information / Varningar):
+                                        </h4>
+                                        <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.85rem; color: #fde047; line-height: 1.4;">
+                                            <template x-for="warn in siePreview.warnings">
+                                                <li x-text="warn" style="margin-bottom: 0.25rem;"></li>
+                                            </template>
+                                        </ul>
+                                    </div>
+                                </template>
+
+                                <!-- Aggregated Totals Grid -->
+                                <h3 style="font-size: 0.95rem; font-weight: bold; margin-bottom: 0.75rem; color: var(--text-main);">Sammanfattning av innehåll</h3>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 0.5rem;">
+                                    <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; text-align: center;">
+                                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Verifikationer</div>
+                                        <div style="font-size: 1.25rem; font-weight: bold; color: var(--text-main);" x-text="siePreview.total_verifications"></div>
+                                    </div>
+                                    <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; text-align: center;">
+                                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Konton i filen</div>
+                                        <div style="font-size: 1.25rem; font-weight: bold; color: var(--text-main);" x-text="siePreview.total_accounts"></div>
+                                    </div>
+                                    <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; text-align: center;">
+                                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Ingående balanser</div>
+                                        <div style="font-size: 1.25rem; font-weight: bold; color: var(--primary);" x-text="siePreview.ib_entries"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Footer Actions -->
+                    <div class="sie-preview-actions" style="display: flex; gap: 1rem; justify-content: flex-end; padding-top: 1rem; border-top: 1px solid var(--border); flex-shrink: 0;">
+                        <button @click="showSiePreviewModal = false; siePreview = null;" style="background: transparent; border: 1px solid var(--border-color); color: var(--text); padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 0.9rem;">Avbryt</button>
+                        
+                        <button class="btn primary" @click="confirmImportSie()" :disabled="!siePreview || !siePreview.is_valid || isUploadingSie" style="background: var(--success); color: white; padding: 10px 24px; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem; transition: background 0.2s;">
+                            <svg x-show="isUploadingSie" class="spinner" style="width: 16px; height: 16px; border-color: white;" viewBox="0 0 24 24"></svg>
+                            <span x-show="!isUploadingSie">Bekräfta & Importera nu</span>
+                            <span x-show="isUploadingSie">Importerar...</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- Rapporter -->
-        <section class="panel" x-show="showReports" id="printable-report" style="display: none; padding: 40px; background: white; color: black; border-radius: 8px;" x-cloak>
+        <section class="panel" x-show="showReports" id="printable-report" style="display: none; padding: 40px; background: white; color: black; border-radius: 8px; width: 100%; max-width: 900px; margin: 0 auto;" x-cloak>
             <div x-show="isLoadingReport" style="text-align: center; padding: 2rem;">Laddar rapport...</div>
             <template x-if="!isLoadingReport && financialReport">
                 <div>
@@ -1913,7 +2067,160 @@
             <span style="font-size: 0.75rem; color: var(--text-muted); opacity: 0.6; display: block; border-top: 1px solid var(--border); padding-top: 1rem;">Alla WORM-verifikationer är säkrade på disk.</span>
         </div>
     </div>
-    
+
+    <!-- SIE Preview Modal (Global ledgerApp scope) -->
+    <div x-show="showSiePreviewModal" @keydown.escape.window="if(showSiePreviewModal && !isUploadingSie) { showSiePreviewModal = false; siePreview = null; }" tabindex="-1" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 9999;" x-cloak>
+        <div class="panel sie-preview-modal-container" style="max-width: 650px; width: 100%; border: 1px solid var(--primary); box-shadow: 0 20px 40px rgba(0,0,0,0.5); background: rgba(30, 41, 59, 0.75); backdrop-filter: blur(16px); border-radius: 16px; padding: 2rem; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; font-family: 'Outfit', sans-serif;">
+            
+            <!-- Header -->
+            <div class="sie-preview-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem; flex-shrink: 0;">
+                <h2 style="color: var(--primary); margin: 0; font-size: 1.4rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+                    <svg class="nav-icon" style="color: var(--primary); width: 24px; height: 24px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                    Förhandsgranska SIE-import
+                </h2>
+                <button @click="showSiePreviewModal = false; siePreview = null;" class="icon-btn" style="color: var(--text-muted); cursor: pointer; border: none; background: transparent; padding: 4px;">
+                    <svg style="width: 20px; height: 20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+
+            <!-- Modal Body (Scrollable) -->
+            <div style="flex-grow: 1; overflow-y: auto; padding-right: 8px; margin-bottom: 1.5rem;">
+                <template x-if="siePreview">
+                    <div>
+                        <!-- File Metadata Grid -->
+                        <div class="sie-preview-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                            <div class="sie-preview-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem;">
+                                <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Källa / Program</span>
+                                <strong style="color: var(--text-main); font-size: 0.9rem;" x-text="siePreview.program || 'Okänd'"></strong>
+                            </div>
+                            <div class="sie-preview-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem;">
+                                <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Företag i filen</span>
+                                <strong style="color: var(--text-main); font-size: 0.9rem;" x-text="siePreview.company_name || 'Okänt'"></strong>
+                            </div>
+                            <div class="sie-preview-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem;">
+                                <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Organisationsnummer</span>
+                                <strong style="color: var(--text-main); font-size: 0.9rem;" x-text="siePreview.org_number || 'Okänt'"></strong>
+                            </div>
+                            <div class="sie-preview-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem;">
+                                <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Teckenkodning</span>
+                                <strong style="color: var(--primary); font-size: 0.9rem; display: flex; align-items: center; gap: 0.25rem;">
+                                    <span x-text="siePreview.encoding_detected"></span>
+                                    <span x-show="siePreview.encoding_detected === 'UTF-8'" style="font-size: 0.7rem; background: rgba(59,130,246,0.15); padding: 1px 4px; border-radius: 4px;">Smart Fallback</span>
+                                </strong>
+                            </div>
+                        </div>
+
+                        <!-- Validation Checklist -->
+                        <h3 style="font-size: 0.95rem; font-weight: bold; margin-bottom: 0.75rem; color: var(--text-main);">Valideringskontroller</h3>
+                        <div class="sie-preview-checklist" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem; background: rgba(0,0,0,0.15); padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
+                            <!-- 1. Fiscal Year Match -->
+                            <div class="sie-preview-checklist-item" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+                                <template x-if="siePreview.fiscal_year_match">
+                                    <svg style="color: var(--success); width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                </template>
+                                <template x-if="!siePreview.fiscal_year_match">
+                                    <svg style="color: var(--danger); width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </template>
+                                <span style="color: var(--text);" x-text="'Räkenskapsår matchar (' + siePreview.file_rar_start + ' till ' + siePreview.file_rar_end + ')'"></span>
+                            </div>
+
+                            <!-- 2. Tomt år -->
+                            <div class="sie-preview-checklist-item" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+                                <template x-if="siePreview.is_empty_year">
+                                    <svg style="color: var(--success); width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                </template>
+                                <template x-if="!siePreview.is_empty_year">
+                                    <svg style="color: var(--danger); width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </template>
+                                <span style="color: var(--text);">Målåret i LocalLedger är helt tomt</span>
+                            </div>
+
+                            <!-- 3. Periodlås -->
+                            <div class="sie-preview-checklist-item" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+                                <template x-if="siePreview.no_period_locks">
+                                    <svg style="color: var(--success); width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                </template>
+                                <template x-if="!siePreview.no_period_locks">
+                                    <svg style="color: var(--danger); width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </template>
+                                <span style="color: var(--text);">Inga låsta perioder i målåret</span>
+                            </div>
+
+                            <!-- 4. Dubbel bokföringsbalans -->
+                            <div class="sie-preview-checklist-item" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+                                <template x-if="siePreview.is_valid && (siePreview.total_debet_ore === siePreview.total_kredit_ore)">
+                                    <svg style="color: var(--success); width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                </template>
+                                <template x-if="!siePreview.is_valid || (siePreview.total_debet_ore !== siePreview.total_kredit_ore)">
+                                    <svg style="color: var(--danger); width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </template>
+                                <span style="color: var(--text);" x-text="'Alla verifikationer balanserar (Totalt: ' + (siePreview.total_debet_ore / 100).toFixed(2) + ' kr)'"></span>
+                            </div>
+                        </div>
+
+                        <!-- Validation Errors -->
+                        <template x-if="siePreview.errors.length > 0">
+                            <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+                                <h4 style="color: var(--danger); margin: 0 0 0.5rem 0; font-size: 0.9rem; font-weight: bold; display: flex; align-items: center; gap: 0.4rem;">
+                                    <svg class="nav-icon" style="color: var(--danger); width: 16px; height: 16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                                    Importen är blockerad på grund av valideringsfel:
+                                </h4>
+                                <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.85rem; color: #fca5a5; line-height: 1.4;">
+                                    <template x-for="err in siePreview.errors">
+                                        <li x-text="err" style="margin-bottom: 0.25rem;"></li>
+                                    </template>
+                                </ul>
+                            </div>
+                        </template>
+
+                        <!-- Warnings (New accounts) -->
+                        <template x-if="siePreview.warnings.length > 0">
+                            <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+                                <h4 style="color: var(--warning); margin: 0 0 0.5rem 0; font-size: 0.9rem; font-weight: bold; display: flex; align-items: center; gap: 0.4rem;">
+                                    <svg class="nav-icon" style="color: var(--warning); width: 16px; height: 16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
+                                    Uppmärksamhet krävs (Information / Varningar):
+                                </h4>
+                                <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.85rem; color: #fde047; line-height: 1.4;">
+                                    <template x-for="warn in siePreview.warnings">
+                                        <li x-text="warn" style="margin-bottom: 0.25rem;"></li>
+                                    </template>
+                                </ul>
+                            </div>
+                        </template>
+
+                        <!-- Aggregated Totals Grid -->
+                        <h3 style="font-size: 0.95rem; font-weight: bold; margin-bottom: 0.75rem; color: var(--text-main);">Sammanfattning av innehåll</h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 0.5rem;">
+                            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Verifikationer</div>
+                                <div style="font-size: 1.25rem; font-weight: bold; color: var(--text-main);" x-text="siePreview.total_verifications"></div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Konton i filen</div>
+                                <div style="font-size: 1.25rem; font-weight: bold; color: var(--text-main);" x-text="siePreview.total_accounts"></div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Ingående balanser</div>
+                                <div style="font-size: 1.25rem; font-weight: bold; color: var(--primary);" x-text="siePreview.ib_entries"></div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Footer Actions -->
+            <div class="sie-preview-actions" style="display: flex; gap: 1rem; justify-content: flex-end; padding-top: 1rem; border-top: 1px solid var(--border); flex-shrink: 0;">
+                <button @click="showSiePreviewModal = false; siePreview = null;" style="background: transparent; border: 1px solid var(--border-color); color: var(--text); padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 0.9rem;">Avbryt</button>
+                
+                <button class="btn primary" @click="confirmImportSie()" :disabled="!siePreview || !siePreview.is_valid || isUploadingSie" style="background: var(--success); color: white; padding: 10px 24px; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem; transition: background 0.2s;">
+                    <svg x-show="isUploadingSie" class="spinner" style="width: 16px; height: 16px; border-color: white;" viewBox="0 0 24 24"></svg>
+                    <span x-show="!isUploadingSie">Bekräfta & Importera nu</span>
+                    <span x-show="isUploadingSie">Importerar...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Heartbeat Watchdog Ping -->
     <script>
         window.pingInterval = null;

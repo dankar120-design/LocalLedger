@@ -169,7 +169,7 @@ func (l *Ledger) GetActiveFiscalYear() (*models.FiscalYear, error) {
 
 // GetAccounts returnerar alla konton i kontoplanen.
 func (l *Ledger) GetAccounts() ([]models.Account, error) {
-	rows, err := l.db.Query("SELECT code, name, type FROM accounts ORDER BY code ASC")
+	rows, err := l.db.Query("SELECT code, name, type, COALESCE(sru_code, '') FROM accounts ORDER BY code ASC")
 	if err != nil {
 		return nil, fmt.Errorf("failed to query accounts: %w", err)
 	}
@@ -178,7 +178,7 @@ func (l *Ledger) GetAccounts() ([]models.Account, error) {
 	var accounts []models.Account
 	for rows.Next() {
 		var a models.Account
-		if err := rows.Scan(&a.Code, &a.Name, &a.Type); err != nil {
+		if err := rows.Scan(&a.Code, &a.Name, &a.Type, &a.SRUCode); err != nil {
 			return nil, fmt.Errorf("failed to scan account: %w", err)
 		}
 		accounts = append(accounts, a)

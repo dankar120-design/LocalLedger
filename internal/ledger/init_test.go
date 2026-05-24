@@ -30,8 +30,8 @@ func TestMigrations_Sequential(t *testing.T) {
 		t.Fatalf("Failed to count schema_migrations: %v", err)
 	}
 
-	// Vi förväntar oss 16 migreringar
-	expectedMigrations := 16
+	// Vi förväntar oss 17 migreringar
+	expectedMigrations := 17
 	if count != expectedMigrations {
 		t.Errorf("Expected %d migrations, got %d", expectedMigrations, count)
 	}

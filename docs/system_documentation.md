@@ -47,8 +47,15 @@ LocalLedger tillämpar en Minimal Viable Chart of Accounts (MVCA) baserad på BA
 - Systemet respekterar SIE-Gruppens tekniska specifikation och tillämpar en strikt bidirektionell konvertering mellan moderna teckenset (UTF-8) och standardens krav på **Codepage 437 (IBM PC8)**. Detta säkerställer att data inte korrumperas vid överföring till äldre skatteprogram.
 - **SIE-4 Import och WORM-kravet:** Verifikationer som importeras via SIE-4 Typ 4I saknar per automatik inbäddade PDF-underlag. Systemet flaggar dessa transaktioner som externt genererade. De undantas från den lokala Boot-Checken av fil-hashar, eftersom originalunderlaget enligt BFL lagras och bevaras i det externa försystemet.
 
+## 7. Deklarationsexport (SRU - BAS 2026)
+
+- **SRU-generering:** LocalLedger kan generera lagstadgade deklarationsblanketter i SRU-format (Standardiserat Räkenskapsutdrag) enligt Skatteverkets tekniska specifikationer för BAS 2026.
+- **Teckenkodning (Latin-1):** I enlighet med Skatteverkets och Bolagsverkets systemkrav exporteras SRU-filerna strikt kodade i **ISO-8859-1 (Latin-1)**. Detta säkerställer att svenska tecken (Å, Ä, Ö) tolkas felfritt i myndigheternas centrala mottagningssystem.
+- **Automatisk mappning:** Systemet mappar automatiskt saldona från företagets BAS-kontoplan mot korrekta SRU-koder för att minimera risker för manuella inmatningsfel vid deklarationstillfället.
+
 ---
 
 ## Ändringslogg
+- **2026-05-24 (v1.2):** Lagt till avsnitt 7 om Deklarationsexport (SRU) i enlighet med BAS 2026 samt noterat prestanda- och stabilitetsförbättringar för sidomeny och datumvalidering.
 - **2026-05-07 (v1.1):** Uppdaterad med legala rutiner för PeriodLocks (momslåsning) samt förtydligande kring SIE-4 WORM-undantag.
 - **2026-05-07 (v1.0):** Initialt dokument upprättat baserat på BFL och BFNAR 2013:2.

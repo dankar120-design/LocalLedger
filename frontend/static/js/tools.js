@@ -19,6 +19,10 @@ document.addEventListener('alpine:init', () => {
         isUploadingBackup: false,
         isExportingBackup: false,
         
+        // SIE Preview
+        showSiePreviewModal: false,
+        siePreview: null,
+        
         // Toast
         toast: null,
         toastTimeout: null,
@@ -169,17 +173,43 @@ document.addEventListener('alpine:init', () => {
         async uploadSieFile() {
             if (!this.selectedSieFile || !this.importSieYear) return;
 
-            if (!confirm(`Varning: Detta kommer importera '${this.selectedSieFile.name}' till det valda räkenskapsåret. Fortsätta?`)) {
-                return;
-            }
-
             this.isUploadingSie = true;
+            this.showToast('Analyserar SIE-fil...', 'info');
             const formData = new FormData();
             formData.append('file', this.selectedSieFile);
-            formData.append('yearID', this.importSieYear); // Måste vara yearID (inte year_id) för backend
+            formData.append('yearID', this.importSieYear);
+            formData.append('dry_run', 'true');
 
             try {
-                // Notera: Content-Type sätts automatiskt av browsern för FormData
+                const res = await this.authFetch('/api/import/sie4?dry_run=true', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (res.ok) {
+                    this.siePreview = await res.json();
+                    this.showSiePreviewModal = true;
+                } else {
+                    const err = await res.json();
+                    this.showToast(`Analys misslyckades: ${err.error}`, 'error');
+                }
+            } catch(e) {
+                this.showToast('Nätverksfel', 'error');
+            } finally {
+                this.isUploadingSie = false;
+            }
+        },
+
+        async confirmImportSie() {
+            if (!this.selectedSieFile || !this.importSieYear) return;
+
+            this.isUploadingSie = true;
+            this.showToast('Importerar verifikationer...', 'info');
+            const formData = new FormData();
+            formData.append('file', this.selectedSieFile);
+            formData.append('yearID', this.importSieYear);
+
+            try {
                 const res = await this.authFetch('/api/import/sie4', {
                     method: 'POST',
                     body: formData
@@ -189,12 +219,14 @@ document.addEventListener('alpine:init', () => {
                     this.showToast('SIE-filen har importerats framgångsrikt!', 'success');
                     this.selectedSieFile = null;
                     this.$refs.sieFileInput.value = '';
+                    this.showSiePreviewModal = false;
+                    this.siePreview = null;
                 } else {
                     const err = await res.json();
                     this.showToast(`Import misslyckades: ${err.error}`, 'error');
                 }
             } catch(e) {
-                this.showToast('Nätverksfel', 'error');
+                this.showToast('Nätverksfel vid import', 'error');
             } finally {
                 this.isUploadingSie = false;
             }

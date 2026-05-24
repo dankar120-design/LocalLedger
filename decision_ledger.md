@@ -341,5 +341,55 @@
     <kärna>1. Förfinat workspaceHash i server.go till att prioritera org_number, falla tillbaka på name, och använda absolutsökväg (s.workspace) för okonfigurerade instanser. 2. Implementerat automatisk localStorage-städning i app.js init() som rensar alla föräldralösa 'eula_accepted_version_'-nycklar utom den aktiva. 3. Lagt till TestWorkspaceHash i server_test.go för komplett verifiering av hashnivåer.</kärna>
     <motivering>Säkerställer fullständig robusthet för EULA-avtal på USB-enheter. Genom att prioritera org_number tål EULA-tillståndet att användaren ändrar sitt företagsnamn, medan absolutsökvägs-fallback hindrar krockar mellan nyskapade okonfigurerade instanser. Rensningen av localStorage-nycklar förhindrar att gamla tillfälliga Sandbox-nycklar ackumuleras i all oändlighet på värddatorn.</motivering>
   </record>
+  <record id="BETA_RELEASE_LAUNCH_ASSETS_01" kategori="UI / UX / Lansering">
+    <beslut>Implementerat och kört automatiserad Playwright-skärmdumpsgenerering för premium lanseringsbilder i betaversionen av LocalLedger samt förberett anpassat lokalt e-postutkast för beta-inbjudan till Ludvig &amp; CO.</beslut>
+    <kärna>1. Utvecklat automatiseringsskriptet scratch/capture_premium_screenshots.py med Playwright för att programmatiskt starta backend-sandboxen, bypassa EULA och navigera till tre nyckelvyer. 2. Genererat exakt 3 högupplösta, retina-skalade (DPI=2) skärmdumpar under mappen lanseringsbilder/ (dashboard, fakturaskapare och momsredovisning). 3. Formulerat ett informellt, lokalt förankrat beta-inbjudningsmail till Skellefteå-startupen Ludvig &amp; CO med Google Drive-leveransstrategi och utan prislåsningar.</kärna>
+    <motivering>Följer de stränga kraven på premiumestetik och lokal tonalitet för Skellefteå-aktörer. Playwright garanterar repeterbar och kristallklar visualisering i 2x DPI utan att kräva manuell handpåläggning eller riskera trasig fönsterkontrast, samtidigt som e-poststrategin med Google Drive minimerar risker för skräppostfilter och undviker framtida prislåsningar.</motivering>
+  </record>
+  <record id="SIE4_VALIDATION_PREVIEW_01" kategori="Säkerhet / Arkitektur / UI">
+    <beslut>Implementerat robust och juridiskt korrekt SIE-4 validering och interaktiv dry-run förhandsgranskningsmodal.</beslut>
+    <kärna>1. Ändrat exportkodning till IBM PC8 (CP437) och lagt till dynamisk #FLAGGA-generering (0 om stängt, 1 om preliminärt) samt #UB-export för nollbalanser. 2. Implementerat byte-sniffande matematisk UTF-8 vs CP437 kodningsdetektering via utf8.Valid. 3. Skapat aggregerad dry-run endpoint (/api/import/sie4?dry_run=true) och PreviewSIE4-valideringssvit för att förhindra O(N) frontend-krascher och blockera ogiltiga år/lås/balanser. 4. Byggt en premium glassmorfisk förhandsgranskningsmodal i index.html för både Inställningar och Verktyg.</kärna>
+    <motivering>Garanti för 100% driftsäker och laglig dataimport/export inför beta-lanseringen. Genom att begränsa dry-run payloaden till aggregerad statistik skyddas användarens prestanda, medan den noggranna byte-detekteringen eliminerar risken för trasiga svenska tecken efter felaktiga UTF-8 exporter från externa system.</motivering>
+  </record>
+  <record id="SIE4_POST_AUDIT_HARDENING_01" kategori="Säkerhet / Kodhygien">
+    <beslut>Slutfört post-audit härdning av SIE-import: införde uppladdningsbegränsning samt explicit DB-iterationskontroll.</beslut>
+    <kärna>1. Säkrat handleImportSIE4 i routes.go med http.MaxBytesReader (20MB) för att förhindra okontrollerade minnesallokeringar och OOM-vektorer. 2. Implementerat explicit rows.Err() kontroll i PreviewSIE4 (sie_import.go) efter SELECT code query-loopen för att säkra mot tysta databasfel.</kärna>
+    <motivering>Stänger de sista potentiella driftssårbarheterna som identifierades under den fientliga audit-processen i Fas 2, vilket lyfter importmotorn till fullständig driftsäkerhet.</motivering>
+  </record>
+  <record id="SRU_RECONCILIATION_BAS2026_01" kategori="Arkitektur / Säkerhet / Skatt">
+    <beslut>Implementerat inbäddad BAS 2026 SRU-export samt reaktiv bankmatchningsmotor mot 1930/1510.</beslut>
+    <kärna>1. Skapat Version 17-migrering för accounts.sru_code. 2. Integrerat sru_bas2026.json (via go:embed) med mappningar till NE_2026 fältkoder. 3. Skapat GenerateSRUFiles (sru.go) för INFO.SRU och BLANKETTER.SRU. 4. Byggt MatchBankTransactions (reconciliation.go) som matchar 1930 insättningar mot 1510 fakturor med OCR-text och datum (±3 dagar). 5. Exponerat endpoints (/api/export/sru i ZIP-format, /api/reconciliation/match) med integrationstester.</kärna>
+    <motivering>En fientlig granskning (/audit, /granska, /merge) godkände en strict Go-baserad, local-first arkitektur som avvisar moln- och CSV-komplexitet. SRU-exporten möjliggör direkt NE-deklaration enligt BFL-krav, medan bankmatchningen reaktivt underlättar avstämning av kundreskontra baserat på befintlig, verifierad SIE-4 bankdata.</motivering>
+  </record>
+  <record id="SRU_RECONCILIATION_POST_AUDIT_01" kategori="Säkerhet / Arkitektur / Prestanda">
+    <beslut>Härdat SRU-exporten med ISO-8859-1 och optimerat bankmatchningen mot prestandabomber och dubbelmatchningar.</beslut>
+    <kärna>1. Integrerat charmap.ISO8859_1 i sru.go. 2. Infört SQL-baserad filtrering av bankinsättningar (1930) i MatchBankTransactions. 3. Lagt till usedDeposits-map för kollisionsundvikande matchning. 4. Infört rows.Err() loopkontroller.</kärna>
+    <motivering>Möter Skatteverkets strikta krav på Latin-1 teckenkodning för svenska bokstäver, förhindrar minneskrascher (O(N) prestandabomb) vid stora transaktionsvolymer, samt garanterar korrekt kundreskontra-matchning utan att en enskild bankinsättning kan matchas till flera fakturor.</motivering>
+  </record>
+  <record id="UI_UX_STABILIZATION_01" kategori="UI / UX / Robusthet">
+    <beslut>Stabiliserat flexbox-layouten, åtgärdat sidomeny-krympning och anpassat/centrerat rapportvyn till A4-maxbredd, samt infört automatisk datumvaliderings-smooth scroll, fokus och röd input-glow.</beslut>
+    <kärna>1. Lagt till flex-shrink: 0 på .sidebar och min-width: 0 på .main-content i style.css för att förhindra ihoptryckning. 2. Justerat #printable-report i index.html till max-width: 900px och centrerat. 3. Skapat .input-error klass i style.css och bundit den via Alpine :class till datumfältet (id post-date-input). 4. Implementerat showToast, focus och smooth-scroll i submitPost (app.js) vid valideringsfel.</kärna>
+    <motivering>Löser tre kritiska layout- och UX-problem rapporterade under användartester (smal rapportvy, krympt sidomeny vid Verktyg &amp; Export, samt missad datumvalidering vid bokföring) på ett strukturellt och estetiskt premium sätt helt i linje med svensk bokföringslagstiftning (BFL) och systemarkitekturen.</motivering>
+  </record>
+  <record id="PRINT_COMPATIBILITY_01" kategori="UI / UX / Utskrift">
+    <beslut>Säkrat utskriftskompatibiliteten för finansiella rapporter genom att lägga till max-width och margin reset i @media print.</beslut>
+    <kärna>Lagt till max-width: none !important; margin: 0 !important; i style-mallen för #printable-report under print-media.</kärna>
+    <motivering>En fientlig eftervalsgranskning visade att det nyligen introducerade max-width: 900px inline-attributet för att bredda rapportvyn på skärmen i produktion riskerade att begränsa och felmarginalisera fysiska utskrifter (Ctrl+P) eller PDF-export via webbläsaren. Genom att lägga till explicita @media print-nollställningar garanteras 100% A4-utskrifter och PDF-filer i linje med svensk bokföringslagstiftning (BFL) och standardiserad dokumentutformning.</motivering>
+  </record>
+  <record id="PRINT_PAGINATION_01" kategori="UI / UX / Utskrift">
+    <beslut>Hävt SPA-applikationens höjdbegränsningar vid utskrift för att tillåta flersidig paginering.</beslut>
+    <kärna>Lagt till overrides i index.html under @media print för body (height: auto !important; overflow: visible !important; display: block !important;) och .main-content (overflow: visible !important; height: auto !important;).</kärna>
+    <motivering>En kritisk granskning avslöjade att SPA-containerns globala inställningar height: 100vh och overflow: hidden hindrade webbläsaren från att paginera rapporter som sträcker sig över mer än en enskild A4-sida vid utskrift eller PDF-export. Genom att häva dessa begränsningar specifikt under print-media kan finansiella rapporter nu sömlöst flöda över flera sidor utan att informationen klipps av efter första sidan.</motivering>
+  </record>
+  <record id="PORTFOLIO_SHOWCASE_01" kategori="Branding / Portfolio">
+    <beslut>Etablerat en fristående public-facing Architecture Showcase i showcase/ katalogen.</beslut>
+    <kärna>Skapat index.html (engelska), style.css, automatiserat WebM videoinspelning via Playwright, och separerat intern PRD-dokumentation från den publika GitHub Pages-miljön.</kärna>
+    <motivering>Möter användarens krav på en premium LinkedIn-visning för en internationell teknisk målgrupp utan att kompromissa med sekretess kring interna PRD-filer genom att placera showcase i en separat katalog och handkurera ledger-poster istället för full exponering.</motivering>
+  </record>
+  <record id="PORTFOLIO_SHOWCASE_POST_AUDIT_01" kategori="Branding / Portfolio / Mobil">
+    <beslut>Säkrat portföljens LinkedIn-delbarhet, iOS-videokompatibilitet, Mermaid CDN-tillförlitlighet samt mobilresponsivitet efter en fientlig granskning.</beslut>
+    <kärna>1. Ändrat og:image till absolut URL på GitHub Pages. 2. Lagt till poster-attribut samt MP4-källa i videon (med poster som fail-safe då ffmpeg saknas lokalt). 3. Uppdaterat Mermaid.js CDN-inkludering till standard jsDelivr @11 utan sköra SRI-hashar. 4. Lagt till omfattande mobilresponsiva @media (max-width: 768px) regler för header, nav-links och layout-komponenter.</kärna>
+    <motivering>Den fientliga audit-granskningen avtäckte kritiska hinder för LinkedIn-optimering (där relativa bildsökvägar blockeras) samt iOS Safari-problem (där WebM-videor utan poster förblir svarta block). Genom att åtgärda dessa samt standardisera Mermaid.js-inkluderingen och bygga in full mobilresponsivitet, garanteras en fläckfri och exklusiv presentation för Tech Leads och rekryterare världen över.</motivering>
+  </record>
 </decision_ledger>
 

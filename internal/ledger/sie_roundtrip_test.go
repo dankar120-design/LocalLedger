@@ -130,3 +130,71 @@ func TestSIERoundtrip(t *testing.T) {
 		}
 	}
 }
+
+func TestSIEValidationAndEncoding(t *testing.T) {
+	dir := t.TempDir()
+	if err := InitWorkspace(dir); err != nil {
+		t.Fatalf("Failed to init workspace: %v", err)
+	}
+	l, err := OpenLedger(dir, "v2.0.0")
+	if err != nil {
+		t.Fatalf("Failed to open ledger: %v", err)
+	}
+	defer l.Close()
+
+	// Skapa år
+	_, err = l.db.Exec("INSERT INTO fiscal_years (start_date, end_date) VALUES ('2026-01-01', '2026-12-31')")
+	if err != nil {
+		t.Fatalf("Failed to create fiscal year: %v", err)
+	}
+	var yearID int64
+	l.db.QueryRow("SELECT id FROM fiscal_years WHERE start_date = '2026-01-01'").Scan(&yearID)
+
+	// Skapa ett konto
+	l.db.Exec("INSERT INTO accounts (code, name, type) VALUES ('1930', 'Bank', 'Tillgång')")
+
+	// 1. Testa CP437 avkodning med svenska tecken
+	// CP437 för "Överföring" med 'Ö' = 0x99, 'ö' = 0x94.
+	// Överföring -> \x99verf\x94ring
+	cp437Bytes := []byte("#FORMAT PC8\r\n#VER A 1 20260601 \"\x99verf\x94ring\"\r\n{\r\n    #TRANS 1930 {} 100.00\r\n    #TRANS 3000 {} -100.00\r\n}\r\n")
+	preview, err := l.PreviewSIE4(yearID, cp437Bytes)
+	if err != nil {
+		t.Fatalf("Preview failed on CP437 bytes: %v", err)
+	}
+	if preview.EncodingDetected != "CP437" {
+		t.Errorf("Expected CP437, got %s", preview.EncodingDetected)
+	}
+
+	// 2. Testa UTF-8 avkodning med svenska tecken
+	utf8Bytes := []byte("#FORMAT PC8\r\n#VER A 1 20260601 \"Överföring\"\r\n{\r\n    #TRANS 1930 {} 100.00\r\n    #TRANS 3000 {} -100.00\r\n}\r\n")
+	previewUTF8, err := l.PreviewSIE4(yearID, utf8Bytes)
+	if err != nil {
+		t.Fatalf("Preview failed on UTF-8 bytes: %v", err)
+	}
+	if previewUTF8.EncodingDetected != "UTF-8" {
+		t.Errorf("Expected UTF-8, got %s", previewUTF8.EncodingDetected)
+	}
+
+	// 3. Testa att obalanserade verifikationer upptäcks
+	unbalancedBytes := []byte("#FORMAT PC8\r\n#VER A 1 20260601 \"Obalanserad\"\r\n{\r\n    #TRANS 1930 {} 100.00\r\n    #TRANS 3000 {} -90.00\r\n}\r\n")
+	previewUnbalanced, err := l.PreviewSIE4(yearID, unbalancedBytes)
+	if err != nil {
+		t.Fatalf("Preview failed on unbalanced bytes: %v", err)
+	}
+	if previewUnbalanced.IsValid {
+		t.Error("Expected IsValid to be false for unbalanced transactions")
+	}
+	if len(previewUnbalanced.Errors) == 0 {
+		t.Error("Expected errors in preview for unbalanced transactions")
+	}
+
+	// 4. Testa att datum utanför räkenskapsåret upptäcks
+	outOfBoundsBytes := []byte("#FORMAT PC8\r\n#VER A 1 20270601 \"Utanför Året\"\r\n{\r\n    #TRANS 1930 {} 100.00\r\n    #TRANS 3000 {} -100.00\r\n}\r\n")
+	previewOutOfBounds, err := l.PreviewSIE4(yearID, outOfBoundsBytes)
+	if err != nil {
+		t.Fatalf("Preview failed on out-of-bounds bytes: %v", err)
+	}
+	if previewOutOfBounds.IsValid {
+		t.Error("Expected IsValid to be false for out-of-bounds date")
+	}
+}

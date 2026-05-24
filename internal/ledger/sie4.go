@@ -13,7 +13,7 @@ import (
 func (l *Ledger) GenerateSIE4(yearID int64) ([]byte, error) {
 	// 1. Get Fiscal Year
 	var fy models.FiscalYear
-	err := l.db.QueryRow("SELECT id, start_date, end_date FROM fiscal_years WHERE id = ?", yearID).Scan(&fy.ID, &fy.StartDate, &fy.EndDate)
+	err := l.db.QueryRow("SELECT id, start_date, end_date, locked_at IS NOT NULL as is_locked FROM fiscal_years WHERE id = ?", yearID).Scan(&fy.ID, &fy.StartDate, &fy.EndDate, &fy.IsLocked)
 	if err != nil {
 		return nil, fmt.Errorf("fiscal year not found: %w", err)
 	}
@@ -31,8 +31,14 @@ func (l *Ledger) GenerateSIE4(yearID int64) ([]byte, error) {
 		return strings.ReplaceAll(s, "\"", "'")
 	}
 
+	// Bestäm #FLAGGA baserat på om året är stängt/låst
+	flagVal := 1
+	if fy.IsLocked {
+		flagVal = 0
+	}
+
 	// --- Header ---
-	buf.WriteString("#FLAGGA 0\r\n")
+	buf.WriteString(fmt.Sprintf("#FLAGGA %d\r\n", flagVal))
 	buf.WriteString("#FORMAT PC8\r\n")
 	buf.WriteString("#SIETYP 4\r\n")
 	buf.WriteString("#PROGRAM \"LocalLedger\" 1.4.0\r\n")
@@ -104,9 +110,8 @@ func (l *Ledger) GenerateSIE4(yearID int64) ([]byte, error) {
 			} else {
 				buf.WriteString(fmt.Sprintf("#IB 0 %s 0.00\r\n", ab.Code))
 			}
-			if ab.Balance != 0 {
-				buf.WriteString(fmt.Sprintf("#UB 0 %s %.2f\r\n", ab.Code, balanceFloat))
-			}
+			// Säkra export av #UB även vid nollsaldo
+			buf.WriteString(fmt.Sprintf("#UB 0 %s %.2f\r\n", ab.Code, balanceFloat))
 		} else {
 			// Resultatkonton: 3xxx till 8xxx
 			if ab.Balance != 0 {
@@ -164,9 +169,9 @@ func (l *Ledger) GenerateSIE4(yearID int64) ([]byte, error) {
 		buf.WriteString("}\r\n")
 	}
 
-	// 5. Convert string buffer to PC8 (CP850)
+	// 5. Convert string buffer to PC8 (CP437)
 	utf8Str := buf.String()
-	encoder := charmap.CodePage850.NewEncoder()
+	encoder := charmap.CodePage437.NewEncoder()
 	pc8Bytes, err := encoder.String(utf8Str)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode to PC8: %w", err)

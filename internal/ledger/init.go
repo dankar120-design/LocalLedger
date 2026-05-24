@@ -366,6 +366,11 @@ func runMigrations(db *sql.DB) error {
 			('3004', 'Momsfri försäljning inom Sverige', 'Intäkt') ON CONFLICT(code) DO NOTHING;
 		UPDATE schema_version SET version = 'v3.6.0', app_min_version = 'v2.0.0';
 		`,
+		// Version 17: BAS 2026 SRU Mappings Support
+		`
+		ALTER TABLE accounts ADD COLUMN sru_code TEXT;
+		UPDATE schema_version SET version = 'v3.7.0', app_min_version = 'v2.0.0';
+		`,
 	}
 
 	for i := currentVersion; i < len(migrations); i++ {
