@@ -391,5 +391,10 @@
     <kärna>1. Ändrat og:image till absolut URL på GitHub Pages. 2. Lagt till poster-attribut samt MP4-källa i videon (med poster som fail-safe då ffmpeg saknas lokalt). 3. Uppdaterat Mermaid.js CDN-inkludering till standard jsDelivr @11 utan sköra SRI-hashar. 4. Lagt till omfattande mobilresponsiva @media (max-width: 768px) regler för header, nav-links och layout-komponenter.</kärna>
     <motivering>Den fientliga audit-granskningen avtäckte kritiska hinder för LinkedIn-optimering (där relativa bildsökvägar blockeras) samt iOS Safari-problem (där WebM-videor utan poster förblir svarta block). Genom att åtgärda dessa samt standardisera Mermaid.js-inkluderingen och bygga in full mobilresponsivitet, garanteras en fläckfri och exklusiv presentation för Tech Leads och rekryterare världen över.</motivering>
   </record>
+  <record id="PUBLIC_HARDENING_CLEAN_SLATE_01" kategori="Säkerhet / Kodhygien">
+    <beslut>Genomfört en fullständig "Clean Slate" av Git-arkivet för att säkra källkoden inför publik publicering.</beslut>
+    <kärna>1. Raderat känsliga sessionstokens, loggar, samt hela sandbox_e2e/-mappen. 2. Tagit bort interna AI-instruktioner, rules och recovery-skript (rescue.py, ag_blueprint_config.html). 3. Uppdaterat .gitignore med strikta filter. 4. Nollställt Git-historiken med git init och skapat en initial ren commit.</kärna>
+    <motivering>Den fientliga granskningen i FAS 2 påvisade allvarliga risker för historiskt dataläckage (t.ex. sandbox-tokens i git-loggar samt lokala filsökvägar i rescue.py). Genom att nollställa Git-trädet och bygga en robust .gitignore rensas all känslig information för alltid, och källkoden kan tryggt publiceras under en Source-Available-licens utan att exponera utvecklingshistorik eller AI-infrastruktur.</motivering>
+  </record>
 </decision_ledger>
 
