@@ -1,0 +1,40 @@
+# Data
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+data/*.sqlite-journal
+data/*.sqlite-wal
+data/*.sqlite-shm
+
+# Binaries
+*.exe
+*.zip
+localledger
+
+# Vendor/Temp
+node_modules/
+vendor/
+.env
+
+# OCR Data
+frontend/static/js/vendor/ocr/swe.traineddata.gz
+
+# Local configurations and debug data
+localledger_config.json
+debug_data.json
+*.db
+*.db-shm
+*.db-wal
+kvitto_*.png
+sandbox_e2e/
+sandbox_inbox_ux.html
+scratch/
+server_error.txt
+server_output.txt
+app_served.js
+app_served_after_fix.js
+app_served_now.js
+lanseringsbilder/
+*.log
+*.token
+*.pdf

@@ -1,0 +1,8 @@
+/* Local Ledger - Grundstyling */
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f3f4f6;
+    color: #1f2937;
+    margin: 0;
+    padding: 20px;
+}

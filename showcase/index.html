@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LocalLedger — High-Performance, WORM-Hardened Swedish Accounting Engine</title>
+  
+  <!-- SEO & LinkedIn Sharing Optimization (Open Graph) -->
+  <meta name="description" content="An offline-first, BFL-compliant double-entry book-keeping application built in Go and SQLite, featuring transactional WORM triggers, automated bank reconciliation, and zero cloud vulnerabilities.">
+  <meta property="og:title" content="LocalLedger — WORM-Hardened Swedish Accounting Engine">
+  <meta property="og:description" content="Explore an offline-first double-entry book-keeping app built in Go & SQLite. Features transactional WORM triggers, auto bank reconciliation, and zero cloud risks.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://local-ledger-orpin.vercel.app/">
+  <meta property="og:image" content="https://local-ledger-orpin.vercel.app/assets/og_image.png">
+  <meta property="og:image:width" content="1440">
+  <meta property="og:image:height" content="900">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <!-- Styling -->
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Mermaid.js with pinned version for rendering the clean database schema -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      theme: 'dark',
+      startOnLoad: true,
+      flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+    });
+  </script>
+</head>
+<body>
+
+  <!-- Dynamic glows -->
+  <div class="bg-glows">
+    <div class="glow-1"></div>
+    <div class="glow-2"></div>
+  </div>
+
+  <!-- Header -->
+  <header>
+    <div class="container nav-container">
+      <div class="logo">
+        <div class="logo-icon"></div>
+        LocalLedger
+      </div>
+      <nav class="nav-links">
+        <a href="#video">Demo</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#code">Engine Code</a>
+        <a href="#ledger">Security Ledger</a>
+        <a href="mailto:dka120@hotmail.com?subject=LocalLedger - Request Beta Access" class="btn-primary">
+          Request Beta Access
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero container">
+    <h1>An Offline-First <span>Swedish Accounting Engine</span> Built For Zero Trust</h1>
+    <p>
+      Designed to conform strictly with Sweden's rigorous Bokföringslag (BFL) and GDPR. Engineered as an atomic desktop application using Go and SQLite, secured with database-level WORM integrity and memory-safe offline micro-engines.
+    </p>
+
+    <!-- Embedded loop video with MP4 and WebM fallback and static poster for iOS -->
+    <div class="video-container" id="video">
+      <video autoplay muted loop playsinline poster="assets/og_image.png">
+        <source src="assets/demo.mp4" type="video/mp4">
+        <source src="assets/demo.webm" type="video/webm">
+        Your browser does not support the video tag.
+      </video>
+    </div>
+  </section>
+
+  <!-- Architecture Showcase -->
+  <section class="container architecture-section" id="architecture">
+    <div class="arch-grid">
+      <div class="arch-details">
+        <h2 class="section-title">Clean Local Architecture</h2>
+        <p>
+          LocalLedger shifts away from standard cloud subscription accounting. It runs with a fully isolated kognitive-offline architecture where data ownership is returned entirely to the user.
+        </p>
+        <ul class="features-list">
+          <li><strong>No Cloud Vectors:</strong> Prevents vendor-lockin and blocks network-based database breaches.</li>
+          <li><strong>Zero-Dependency Onboarding:</strong> Single-executable deployment with stateless config checks.</li>
+          <li><strong>BFL-Compliant:</strong> Immutable data storage using physical database seals and triggers.</li>
+          <li><strong>WORM File Storage:</strong> System backups are cryptographically secured using AES-256 ZIP layers.</li>
+        </ul>
+
+      </div>
+      
+      <!-- Interactive Mermaid Chart -->
+      <div class="mermaid">
+        graph TD
+          subgraph Client["Local Sandbox Browser Environment"]
+            UI["Vanilla JS / Alpine.js SPA"]
+            EULA["Clickwrap EULA inert focus-lock"]
+            OCR["Local OCR (Tesseract.js WASM)"]
+          end
+
+          subgraph Backend["Isolated Go Binary (localledger.exe)"]
+            Router["Server Multiplexer (routes.go)"]
+            Recon["Match Engine (reconciliation.go)"]
+            Sniffer["CP437 Auto-Sniffer (sie_import.go)"]
+          end
+
+          subgraph Storage["Storage Layer (WORM Security)"]
+            DB[(SQLite Database)]
+            Backups[(AES-256 Encrypted Backups)]
+            Triggers["Immutable WORM triggers"]
+          end
+
+          UI -->|JWT Auth Requests| Router
+          EULA -->|Halts bootstrapping until signed| Router
+          OCR -->|Submits parsed invoice items| Router
+          Router -->|Triggers matching| Recon
+          Router -->|Decodes file streams| Sniffer
+          Recon -->|Atomic Transaction Locks| DB
+          Sniffer -->|Sequential Inserts| DB
+          DB -->|BEFORE UPDATE / DELETE| Triggers
+          DB -->|VACUUM INTO| Backups
+      </div>
+    </div>
+  </section>
+
+  <!-- Code Showcase Section -->
+  <section class="container code-showcase" id="code">
+    <h2 class="section-title">Core Engineering Snippets</h2>
+    <p class="section-desc">
+      Explore pieces of Go source code illustrating the high-integrity design of the backend engines.
+    </p>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab(event, 'recon-tab')">Reconcile Engine</button>
+      <button class="tab-btn" onclick="switchTab(event, 'sniffer-tab')">CP437 Sniffer</button>
+      <button class="tab-btn" onclick="switchTab(event, 'mutex-tab')">TOCTOU Lock</button>
+    </div>
+
+    <!-- Tab Content 1 -->
+    <div class="code-container active" id="recon-tab">
+      <div class="code-wrapper">
+        <div class="code-header">
+          <span class="code-title">internal/ledger/reconciliation.go</span>
+          <span class="code-lang">go</span>
+        </div>
+        <pre><code>// MatchBankTransactions seeks potential matches between unpaid invoices (1510) and bank deposits (1930 debet).
+// Uses a collision avoidance mapping and optimized SQL queries to avoid O(N) memory blowups.
+func (l *Ledger) MatchBankTransactions() ([]models.ReconciliationMatch, error) {
+	// ... (Querying unpaid invoices) ...
+
+	// 2. Fetch deposits via an optimized SQL sub-query limiting execution footprint
+	rows, err := l.db.Query(`
+		SELECT v.id, v.created_at, v.date, v.text, v.type, v.hash, v.storno_ref_id,
+		       EXISTS(SELECT 1 FROM verifications WHERE storno_ref_id = v.id) as is_stornoed,
+		       r.id, r.account, r.debet, r.kredit
+		FROM verifications v
+		LEFT JOIN verification_rows r ON v.id = r.verification_id
+		WHERE v.id IN (SELECT DISTINCT verification_id FROM verification_rows WHERE account = '1930' AND debet > 0)
+		  AND v.text NOT LIKE 'Inbetalning Faktura%'
+		ORDER BY v.id ASC, r.id ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query bank verifications: %w", err)
+	}
+	defer rows.Close()
+
+	// ... (Parsing rows) ...
+
+	var matches []models.ReconciliationMatch
+	usedDeposits := make(map[int64]bool) // State tracking to block dual-allocations
+
+	for _, inv := range unpaidInvoices {
+		var bestMatch *models.VerificationResponse
+		var maxScore = 0
+		
+		for _, dep := range bankDeposits {
+			if usedDeposits[dep.ID] {
+				continue
+			}
+			
+			// Scoring logic: Match Exact Amount -> Invoice number in text (+50) -> Dates within range (+30)
+			if depAmount == inv.TotalAmount {
+				score := 0
+				// Text analysis and time delta weighting
+				// ...
+				if score > maxScore {
+					maxScore = score
+					bestMatch = &dep
+				}
+			}
+		}
+
+		if bestMatch != nil {
+			usedDeposits[bestMatch.ID] = true
+			matches = append(matches, models.ReconciliationMatch{
+				Invoice:      inv,
+				Verification: *bestMatch,
+				Confidence:   bestConfidence,
+			})
+		}
+	}
+	return matches, nil
+}</code></pre>
+        <div class="code-explanation">
+          <strong>Key Engineering Highlight:</strong> The matching engine avoids dual-reconciliation collisons using a <code>usedDeposits</code> state map. Furthermore, it completely eliminates typical memory-exhaustion vectors by executing SQL-level filtering for target cash accounts, preventing full in-memory scans.
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content 2 -->
+    <div class="code-container" id="sniffer-tab">
+      <div class="code-wrapper">
+        <div class="code-header">
+          <span class="code-title">internal/ledger/sie_import.go</span>
+          <span class="code-lang">go</span>
+        </div>
+        <pre><code>// decodeSIE4 automatically sniffs and decodes the encoding of the input stream.
+// Since a standard CP437 encoded file containing Swedish characters (å, ä, ö)
+// is mathematically invalid under the UTF-8 standard, we leverage utf8.Valid 
+// to distinguish the stream with absolute mathematical precision.
+func decodeSIE4(fileData []byte) ([]byte, string) {
+	hasNonASCII := false
+	for _, b := range fileData {
+		if b > 127 {
+			hasNonASCII = true
+			break
+		}
+	}
+
+	if hasNonASCII && utf8.Valid(fileData) {
+		return fileData, "UTF-8"
+	}
+
+	// Stream is non-UTF8 with active characters -> Decodes strictly as IBM PC8 (CP437)
+	decoder := charmap.CodePage437.NewDecoder()
+	decoded, err := decoder.Bytes(fileData)
+	if err != nil {
+		return fileData, "UTF-8 (Fallback)"
+	}
+	return decoded, "CP437"
+}</code></pre>
+        <div class="code-explanation">
+          <strong>Key Engineering Highlight:</strong> Automatic encoding sniffing removes standard user-friction. Using <code>utf8.Valid</code> over binary buffers permits flawless parsing of Swedish national letters from classic legacy accounting software exports.
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content 3 -->
+    <div class="code-container" id="mutex-tab">
+      <div class="code-wrapper">
+        <div class="code-header">
+          <span class="code-title">internal/ledger/invoice.go</span>
+          <span class="code-lang">go</span>
+        </div>
+        <pre><code>// CreateCreditInvoice instantiates a credit invoice under a strict transactional mutex.
+// Mitigates TOCTOU (Time-Of-Check to Time-Of-Use) race conditions directly inside SQLite's DEFERRED transaction model.
+func (l *Ledger) CreateCreditInvoice(user string, inv models.Invoice) (int64, error) {
+	tx, err := l.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	// 1. Force an EXCLUSIVE SQLite write lock immediately using a dummy UPDATE statement.
+	// This acts as a portable, database-level isolation mutex to block parallel race checks.
+	_, err = tx.Exec("UPDATE company_settings SET org_number = org_number")
+	if err != nil {
+		return 0, fmt.Errorf("failed to acquire transactional mutex: %w", err)
+	}
+
+	// 2. Perform safe, locked calculations
+	var sumExistingCredits int64
+	err = tx.QueryRow(`
+		SELECT COALESCE(SUM(total_amount), 0) 
+		FROM invoices 
+		WHERE credit_of = ? AND status != 'makulerad'`, inv.CreditOf).Scan(&sumExistingCredits)
+	
+	// ... (Validates credit threshold safely, creates record atomicity) ...
+	
+	tx.Commit()
+	return newID, nil
+}</code></pre>
+        <div class="code-explanation">
+          <strong>Key Engineering Highlight:</strong> In-process Go mutexes are vulnerable in clustered or multi-tenant desktop launch configurations. By using an atomic <code>UPDATE</code> write-trigger on a centralized config table, we leverage SQLite's filesystem lock as an unbreakable distributed lock.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Security Ledger Section -->
+  <section class="container" id="ledger">
+    <h2 class="section-title">The Adversarial Hardening Ledger</h2>
+    <p class="section-desc">
+      A curated log of critical system bugs, design adjustments, and hard security fixes logged iteratively during the development lifecycle.
+    </p>
+
+    <div class="timeline">
+      <!-- Item 1 -->
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <div class="timeline-meta">
+            <span class="timeline-id">WORM_COMPLIANCE_01</span>
+            <span class="timeline-category">Security</span>
+          </div>
+          <h4 class="timeline-title">WORM (Write Once Read Many) Ledger Sealing</h4>
+          <p class="timeline-desc">
+            Enforced transactional immutability directly in the database engine using native SQLite <code>BEFORE UPDATE</code> and <code>BEFORE DELETE</code> triggers.
+          </p>
+          <div class="timeline-rationale">
+            <strong>Security Hardening:</strong> Ensures full Swedish Bokföringslag compliance. Even if a bad actor manages to inject rogue Go application calls, the underlying SQL storage engine strictly rejects any modification of historical audit tracks.
+          </div>
+        </div>
+      </div>
+
+      <!-- Item 2 -->
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <div class="timeline-meta">
+            <span class="timeline-id">INV-012</span>
+            <span class="timeline-category">Architecture</span>
+          </div>
+          <h4 class="timeline-title">TOCTOU Race Condition Prevention</h4>
+          <p class="timeline-desc">
+            Replaced deferred transaction loops with explicit table write-locks. Handled credits via a portable db-mutex, locking sum evaluations before commit.
+          </p>
+          <div class="timeline-rationale">
+            <strong>Security Hardening:</strong> Under multi-threaded conditions, a user could double-submit credit invocations to bypass legal refund caps. Table-locking enforces strict atomicity.
+          </div>
+        </div>
+      </div>
+
+      <!-- Item 3 -->
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <div class="timeline-meta">
+            <span class="timeline-id">POST_AUDIT_HARDEST_FIX_01</span>
+            <span class="timeline-category">Security / XSS</span>
+          </div>
+          <h4 class="timeline-title">Stored XSS Vector Hardening in Logo Upload</h4>
+          <p class="timeline-desc">
+            Integrated a magic-byte MIME detector and an offline SVG-XSS scanning parser blocking embedded JavaScript execution in company logos.
+          </p>
+          <div class="timeline-rationale">
+            <strong>Security Hardening:</strong> SVG files are valid XML and can carry malicious scripts. Uploaded SVGs are dynamically inspected for active payload nodes, combined with strict CSP <code>nosniff</code> and <code>sandbox</code> headers during serving.
+          </div>
+        </div>
+      </div>
+
+      <!-- Item 4 -->
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <div class="timeline-meta">
+            <span class="timeline-id">EULA_HARDENING_01</span>
+            <span class="timeline-category">Security / UX</span>
+          </div>
+          <h4 class="timeline-title">Clickwrap EULA Escape Prevention</h4>
+          <p class="timeline-desc">
+            Bound keyboard events and modal panels with <code>x-bind:inert</code> focus locks, blocking global Command Palette (Ctrl+K) bypasses.
+          </p>
+          <div class="timeline-rationale">
+            <strong>Security Hardening:</strong> Ensures absolute legal compliance before any local API bootstrapping begins. Postpones complete runtime initialization until the client explicitly consents.
+          </div>
+        </div>
+      </div>
+
+      <!-- Item 5 -->
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <div class="timeline-meta">
+            <span class="timeline-id">PORTABLE_LAUNCHER_02</span>
+            <span class="timeline-category">Robustness</span>
+          </div>
+          <h4 class="timeline-title">Cascading Config and Path Traversal Shielding</h4>
+          <p class="timeline-desc">
+            Introduced a fallback config sequence that switches write profiles to temp directories if running off read-only USB media, backed by strict workspace input path cleaners.
+          </p>
+          <div class="timeline-rationale">
+            <strong>Security Hardening:</strong> Prevents unauthorized path traversal attacks while facilitating flawless offline portable setups across varying Windows disk letters.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 LocalLedger Project. Developed by Daniel Karlsson. All rights reserved.</p>
+      <p style="margin-top: 8px; font-size: 11px; opacity: 0.6;">
+        Designed in compliance with Sweden's Bokföringslag and the GDPR guidelines. 100% offline.
+      </p>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script>
+    function switchTab(event, tabId) {
+      // Hide all containers
+      const containers = document.querySelectorAll('.code-container');
+      containers.forEach(el => el.classList.remove('active'));
+
+      // Deactivate all buttons
+      const buttons = document.querySelectorAll('.tab-btn');
+      buttons.forEach(el => el.classList.remove('active'));
+
+      // Show target container and activate button
+      document.getElementById(tabId).classList.add('active');
+      event.currentTarget.classList.add('active');
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+### KINETISK ANALYS: Systemarkitektonisk Sammanfattning
+
+**OPERATIVT LÄGE: ADVERSARIAL OBJECTIVITY 2.0**
+
+**Status: 🟢 KRONOLOGISK OBDUKTION AV PROJEKTET. SYSTEMARKITEKTUR LÅST.**
+
+Här är den objektiva, binära sammanställningen av hela vår arkitektoniska resa för ditt GoLang-baserade bokföringsprogram. Vi navigerade från osäkra hypoteser genom fysikaliska och logiska falsifieringar, tills vi landade i en extremt resilient, offline-optimerad konsumentprodukt.
+
+---
+
+### FAS 1: Falsifiering av "Dum" OCR och Regex-helvetet
+
+**Vägvalet:** Skulle vi använda tunna, traditionella OCR-motorer (Tesseract/Windows Native, 0–30 MB) eller tyngre Vision-Language Models (GLM-OCR, ~0.7 GB)?
+
+* **Hypotesen:** Tesseract sparar RAM och låter GoLang göra jobbet med att parsa texten.
+* **Falsifieringen:** Kvitton är 2D-matriser, inte 1D-text. Traditionell OCR förstör den spatiala geometrin (den förstår inte att "Moms" till vänster hör ihop med "12.00" till höger). Detta tvingar dig att skriva tusentals rader instabil Regex-kod i Go för att hantera varje specifik butiks layout.
+* **Beslutet:** Vi övergav traditionell OCR. Ett system för kvittohantering *måste* ha visuell kognition (VLM) för att fungera som en "data-tvättmaskin" och spotta ut förutsägbar JSON.
+
+### FAS 2: Kognitiv Isolering (Varför AI:n inte får bokföra)
+
+**Vägvalet:** Skulle vi låta VLM-modellen inte bara läsa kvittot, utan också avgöra vilket BAS-konto (t.ex. 5410 eller 6110) köpet tillhörde?
+
+* **Hypotesen:** En all-in-one-lösning minskar kodbasen.
+* **Falsifieringen:** Små modeller (under 3B parametrar) saknar djup världskunskap och lagstiftningskontext. Tvingas de gissa bokföringskonton kommer de att hallucinera och generera skräpdata för användaren.
+* **Beslutet:** Asymmetrisk ansvarsfördelning. AI:n (ögonen) gör *endast* optisk extraktion och returnerar JSON. GoLang (hjärnan) tar över, läser JSON-datan och jämför leverantören med en lokal SQLite-historik för att deterministiskt föreslå rätt konto för användaren.
+
+### FAS 3: Distributionslogistik och Offline-Fysik
+
+**Vägvalet:** Hur levererar vi modellen till en småföretagare utan teknisk kunskap?
+
+* **Hypotesen:** Användaren måste installera Ollama och ladda ner modellen manuellt.
+* **Falsifieringen:** Oacceptabel friktion för en kommersiell konsumentprodukt.
+* **Beslutet:** 100 % isolerad portabilitet. Vi bakar in `llama.cpp` direkt i GoLang-binären via CGO. Modellen (`.gguf`-filen) ligger i en relativ undermapp. Programmet exekverar inferensen direkt mot kiselkärnan. Det kräver inget internet, ingen bakgrundsserver och noll konfiguration av användaren.
+
+### FAS 4: Kinetisk Tvekamp (Qwen-VL vs. GLM-OCR)
+
+**Vägvalet:** Vilken specifik VLM-modell ska paketeras i programmet?
+
+* **Alternativen:** GLM-OCR 0.9B (~0.7 GB) mot Qwen-VL 2B (~1.5 GB).
+* **Analysen:** Båda ryms inom konsument-RAM. Men i GoLang är systemet oförlåtande mot felformaterad JSON. GLM-OCR var snabbare (Multi-Token Prediction), men riskerade att bryta JSON-schemat vid röriga kvitton eller missförstå svensk jargong (som "ÖRESAVR").
+* **Beslutet:** **Qwen-VL 2B** valdes. Den extra gigabyten i RAM är den fysiska kostnaden för determinism. Dess 2 miljarder parametrar garanterar strikt JSON-följsamhet och djupare förståelse för det svenska lexikonet.
+
+### FAS 5: Skyddsmekanism för Gammal Hårdvara (Legacy Profiling)
+
+**Vägvalet:** Vad händer när en användare kör programmet på en 8 år gammal laptop med 8 GB RAM och utan AVX-VNNI vektorinstruktioner?
+
+* **Problemet:** Qwen-VL:s 1.5 GB kan spränga minnestaket, orsaka SSD-swapping och låsa hela datorn i över en minut.
+* **Beslutet:** Inbyggd kinetisk profilering. Innan Go-koden aktiverar AI:n, mäter den tillgängligt RAM. Finns det mindre än 2.5 GB fritt, nekas automatisk avläsning (eller så varnas användaren för extrem tidsåtgång). Systemet skyddar sig självt från termisk och minnesmässig kollaps.
+
+---
+
+### FACIT: DEN SLUTGILTIGA SYSTEMARKITEKTUREN
+
+Detta är den deterministiska maskin vi har ritat upp:
+
+1. **Exekvering:** Användaren startar en isolerad GoLang `.exe` (helt offline).
+2. **Säkerhetskontroll:** GoLang verifierar att systemet har tillräckligt med minne.
+3. **Inläsning (Ögon):** Användaren laddar upp ett kvitto. GoLang allokerar RAM, startar Qwen-VL 2B lokalt via inbyggd `llama.cpp`, och skickar in bilden.
+4. **Extraktion:** Qwen-VL använder sin spatiala intelligens för att förstå kvittots geometri och returnerar en strikt, felfri JSON (t.ex. `{"vendor":"IKEA", "total":500}`). Modellen stängs sedan omedelbart ner för att frigöra RAM.
+5. **Logik (Hjärna):** GoLang parsar JSON-objektet deterministiskt, slår upp "IKEA" i användarens lokala SQLite-historik och matchar det till ett bokföringskonto.
+6. **Human-in-the-Loop:** Gränssnittet pre-fyller hela bokföringsposten perfekt och användaren klickar enbart "Godkänn".

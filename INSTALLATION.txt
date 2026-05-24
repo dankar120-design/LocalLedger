@@ -1,0 +1,122 @@
+========================================================================
+             INSTALLATIONSGUIDE & ANVÄNDARMANUAL — LOCALLEDGER BETA
+========================================================================
+
+Tack för att du deltar i utvärderingen av LocalLedger! Denna programvara är
+byggd för att vara en blixtsnabb, local-first och helt integritetssäker
+bokföringsmotor för Windows, helt i enlighet med svensk Bokföringslag (BFL)
+och GDPR.
+
+Eftersom all data lagras lokalt på din egen dator har du full äganderätt
+och kontroll över dina finansiella uppgifter. Ingen molnsynkning, ingen 
+telemetri och inga dolda nätverksöverföringar sker.
+
+
+------------------------------------------------------------------------
+1. SYSTEMKRAV
+------------------------------------------------------------------------
+* Operativsystem: Windows 10 eller Windows 11 (64-bit).
+* Inga externa drivrutiner, databasmotorer (t.ex. SQL Server) eller 
+  miljöer (t.ex. Go eller Java) behöver installeras. Allt är inbakat.
+
+
+------------------------------------------------------------------------
+2. FÖRSTA UPPSTART & WINDOWS SÄKERHET
+------------------------------------------------------------------------
+Eftersom LocalLedger är ett nyskapat och helt fristående program (inte 
+digitalt signerat med dyra globala certifikat ännu) kommer Windows inbyggda
+skydd att reagera första gången du försöker öppna programmet.
+
+Följ dessa steg för att starta på ett säkert sätt:
+
+A) WINDOWS SMARTSCREEN (BLÅ SPÄRRRUTA)
+   När du dubbelklickar på "LocalLedger.exe" första gången efter nedladdning
+   visar Windows en blå ruta med texten "SmartScreen för Windows Defender
+   förhindrade att en oigenkänd app startades...".
+   
+   1. Klicka på länken "Mer information" (längst upp i den blå texten).
+   2. Då dyker en ny knapp upp längst ner: "Kör ändå". Klicka på den.
+   3. Denna varning visas BARA första gången du öppnar just den filen.
+
+B) BRANDVÄGGSFRÅGAN (PORT 8080)
+   LocalLedger fungerar som en inbäddad, supersäker lokal server som
+   kommunicerar direkt med din webbläsare via adressen http://localhost:8080.
+   
+   * Om Windows Firewall (brandväggen) frågar om du vill tillåta nätverks-
+     åtkomst för programmet, räcker det att godkänna åtkomst för
+     "Privata nätverk". 
+   * Detta är helt säkert: Programmet lyssnar bara internt på din egen
+     dator för att kunna visa gränssnittet. Ingen utifrån kan nå din data.
+
+
+------------------------------------------------------------------------
+3. UPPSKATTAD ONBOARDING (STEG-FÖR-STEG)
+------------------------------------------------------------------------
+1. När programmet startar öppnas ditt webbläsarfönster automatiskt i ett
+   avskalat "App-läge" (utan flikar och URL-rad) för bästa desktop-känsla.
+2. Första gången möts du av ett Slutanvändaravtal (EULA). Läs igenom det
+   och klicka på "Jag godkänner EULA-avtalet".
+3. LocalLedger startar därefter sin Setup Wizard (installationsguide):
+   * Ange ett namn för ditt första företag.
+   * Välj var du vill spara företagets databasmapp (vi rekommenderar en
+     säker lokal mapp, undvik direkt Dropbox/OneDrive-synkning under drift 
+     för att motverka fillåsningsfel).
+   * När du slutför guiden skapas automatiskt en skrivbordsgenväg till 
+     ditt nyskapade företag.
+
+
+------------------------------------------------------------------------
+4. ATT HANTERA FLERA FÖRETAG (MULTI-TENANT)
+------------------------------------------------------------------------
+LocalLedger stöder USB-portabel drift och flera oberoende företag:
+* När du startar appen får du välja vilket företag (arbetsyta) du vill öppna.
+* Du kan när som helst skapa nya företag eller ta bort genvägar till gamla
+  inifrån systemet.
+* Du kan köra programmet direkt från ett USB-minne. Flyttar du USB-enheten
+  kommer LocalLedger att automatiskt anpassa sina interna sökvägar till den
+  nya enhetsbokstaven!
+
+
+------------------------------------------------------------------------
+5. SÅ UPPGRADERAR DU TILL EN NY BETA-VERSION
+------------------------------------------------------------------------
+Att uppdatera är extremt enkelt och kräver ingen krånglig avinstallation:
+1. Ladda ner den nya ".zip"-filen från Google Drive (t.ex. 
+   LocalLedger_v1.4.0-beta.2_windows_amd64.zip).
+2. Packa upp filen.
+3. Ta den nya "LocalLedger.exe" och kopiera in den i din installationsmapp.
+4. Skriv över den gamla filen.
+5. KLART! Eftersom all din företagsdata sparas i dina separata företagsmappar,
+   och inte i programfilen, är dina inställningar, verifikationer och genvägar
+   helt orörda och fungerar direkt med den nya versionen.
+
+
+------------------------------------------------------------------------
+6. SÄKERHETSKOPIERING (BACKUP) & ÅTERSTÄLLNING
+------------------------------------------------------------------------
+LocalLedger har en inbyggd WORM-motor (Write Once Read Many) och automatisk
+versionskontroll. För att säkra din data ytterligare bör du regelbundet 
+skapa säkerhetskopior:
+* Gå till "Verktyg & Export" eller "Inställningar" inifrån appen.
+* Välj "Säkerhetskopiera". Du kan välja att kryptera din backup-fil (.llbak)
+  med AES-256 och ett eget lösenord.
+* Vid eventuell datorkrasch kan du starta LocalLedger och under uppstarts-
+  guiden (Setup Wizard) välja "Återställ från Säkerhetskopia" för att få 
+  tillbaka allt på en sekund.
+
+
+------------------------------------------------------------------------
+7. FEEDBACK & SUPPORT — HJÄLP OSS BLI BÄTTRE!
+------------------------------------------------------------------------
+Vi vill jättegärna veta vad du tycker! Om du hittar en bugg, saknar en 
+funktion eller tycker att något är otydligt:
+
+* E-post: dka120@hotmail.com
+* Ange "Feedback LocalLedger Beta" som ämne.
+* Du kan också skicka feedback direkt inifrån programmets "Hjälp & Guide"-
+  panel i sidomenyn.
+
+Tack för din hjälp att göra LocalLedger till Sveriges bästa bokföringsmotor!
+
+/ Daniel Karlsson
+========================================================================
