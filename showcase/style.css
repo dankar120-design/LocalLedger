@@ -130,9 +130,25 @@ header {
   color: var(--primary);
 }
 
+.nav-links a.btn-primary {
+  color: #ffffff;
+}
+
+.nav-links a.btn-primary:hover {
+  color: #ffffff;
+}
+
+.nav-links a.btn-secondary-git {
+  color: var(--text);
+}
+
+.nav-links a.btn-secondary-git:hover {
+  color: var(--text);
+}
+
 .btn-primary {
   background: var(--glow-gradient);
-  color: #fff;
+  color: #ffffff;
   border: none;
   padding: 10px 20px;
   border-radius: 8px;
@@ -151,6 +167,29 @@ header {
 .btn-primary:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 24px rgba(6, 182, 212, 0.3);
+}
+
+.btn-secondary-git {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: var(--transition);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-secondary-git:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--primary);
+  transform: translateY(-2px);
 }
 
 /* Hero Section */
@@ -332,6 +371,13 @@ header {
   border: 1px solid var(--panel-border);
   display: flex;
   justify-content: center;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.mermaid svg {
+  max-width: 100%;
+  height: auto;
 }
 
 .arch-details h3 {
@@ -595,6 +641,11 @@ footer {
 
   .nav-links a {
     margin-left: 0;
+    font-size: 13px;
+  }
+
+  .btn-primary, .btn-secondary-git {
+    padding: 8px 12px;
     font-size: 13px;
   }
 
