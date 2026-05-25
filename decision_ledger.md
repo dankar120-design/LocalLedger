@@ -397,9 +397,9 @@
     <motivering>Den fientliga granskningen i FAS 2 påvisade allvarliga risker för historiskt dataläckage (t.ex. sandbox-tokens i git-loggar samt lokala filsökvägar i rescue.py). Genom att nollställa Git-trädet och bygga en robust .gitignore rensas all känslig information för alltid, och källkoden kan tryggt publiceras under en Source-Available-licens utan att exponera utvecklingshistorik eller AI-infrastruktur.</motivering>
   </record>
   <record id="SHOWCASE_HARDENING_01" kategori="UI / UX / Branding">
-    <beslut>Härdat och optimerat den publika Showcase-sidan samt integrerat GitHub-länkar.</beslut>
-    <kärna>1. Löste färg-specifikitetsfel på navigationsknappar. 2. Reordnade video källor till .webm före .mp4 för att undvika 404-fel. 3. Säkrade responsiv Mermaid SVG-skalning. 4. Integrerade mobilvänlig GitHub-länk i header/footer samt ställde om OG-metadata.</kärna>
-    <motivering>Garanterar en professionell och fläckfri presentation av LocalLedger inför beta-lanseringen på LinkedIn, med bibehållen fallback för äldre iOS-enheter och fullständig mobilresponsivitet på GitHub Pages.</motivering>
+    <beslut>Härdat, optimerat och konverteringssäkrat den publika Showcase-sidan, integrerat GitHub-länkar, infört källkodssyntaxfärgning samt designat responsiva Hero CTAs.</beslut>
+    <kärna>1. Löste färg-specifikitetsfel på navigationsknappar. 2. Reordnade video källor till .webm före .mp4 för att undvika 404-fel. 3. Säkrade responsiv Mermaid SVG-skalning. 4. Integrerade mobilvänliga GitHub-länkar i header/footer samt ställde om OG-metadata. 5. Integrerade Highlight.js via CDN för Go-syntaxfärgning av källkod. 6. Designade konverteringsoptimerade och responsiva hero-CTA-knappar. 7. Implementerade smooth fade-in tab transitions via CSS-animationer.</kärna>
+    <motivering>Den fientliga gransknings- och härdningsfasen (/goal) lyfter showcasen till absolut världsklass. Genom att lösa kontrastfel, introducera syntaxfärgning och hero-CTAs samt jämna ut övergångar garanteras en fläckfri och konverteringsstark presentation på GitHub Pages inför delning på LinkedIn.</motivering>
   </record>
 </decision_ledger>
 

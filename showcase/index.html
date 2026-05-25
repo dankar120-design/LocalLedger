@@ -16,6 +16,10 @@
   <meta property="og:image:height" content="900">
   <meta name="twitter:card" content="summary_large_image">
 
+  <!-- Highlight.js for beautiful Go code syntax highlighting -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
   <!-- Styling -->
   <link rel="stylesheet" href="style.css">
   
@@ -68,6 +72,18 @@
     <p>
       Designed to conform strictly with Sweden's rigorous Bokföringslag (BFL) and GDPR. Engineered as an atomic desktop application using Go and SQLite, secured with database-level WORM integrity and memory-safe offline micro-engines.
     </p>
+
+    <div class="hero-ctas">
+      <a href="mailto:dka120@hotmail.com?subject=LocalLedger - Request Beta Access" class="btn-primary">
+        Request Beta Access
+      </a>
+      <a href="https://github.com/dankar120-design/LocalLedger" target="_blank" class="btn-secondary-git">
+        <svg class="github-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+        View on GitHub
+      </a>
+    </div>
 
     <!-- Embedded loop video with MP4 and WebM fallback and static poster for iOS -->
     <div class="video-container" id="video">
@@ -151,7 +167,7 @@
           <span class="code-title">internal/ledger/reconciliation.go</span>
           <span class="code-lang">go</span>
         </div>
-        <pre><code>// MatchBankTransactions seeks potential matches between unpaid invoices (1510) and bank deposits (1930 debet).
+        <pre><code class="language-go">// MatchBankTransactions seeks potential matches between unpaid invoices (1510) and bank deposits (1930 debet).
 // Uses a collision avoidance mapping and optimized SQL queries to avoid O(N) memory blowups.
 func (l *Ledger) MatchBankTransactions() ([]models.ReconciliationMatch, error) {
 	// ... (Querying unpaid invoices) ...
@@ -222,7 +238,7 @@ func (l *Ledger) MatchBankTransactions() ([]models.ReconciliationMatch, error) {
           <span class="code-title">internal/ledger/sie_import.go</span>
           <span class="code-lang">go</span>
         </div>
-        <pre><code>// decodeSIE4 automatically sniffs and decodes the encoding of the input stream.
+        <pre><code class="language-go">// decodeSIE4 automatically sniffs and decodes the encoding of the input stream.
 // Since a standard CP437 encoded file containing Swedish characters (å, ä, ö)
 // is mathematically invalid under the UTF-8 standard, we leverage utf8.Valid 
 // to distinguish the stream with absolute mathematical precision.
@@ -260,7 +276,7 @@ func decodeSIE4(fileData []byte) ([]byte, string) {
           <span class="code-title">internal/ledger/invoice.go</span>
           <span class="code-lang">go</span>
         </div>
-        <pre><code>// CreateCreditInvoice instantiates a credit invoice under a strict transactional mutex.
+        <pre><code class="language-go">// CreateCreditInvoice instantiates a credit invoice under a strict transactional mutex.
 // Mitigates TOCTOU (Time-Of-Check to Time-Of-Use) race conditions directly inside SQLite's DEFERRED transaction model.
 func (l *Ledger) CreateCreditInvoice(user string, inv models.Invoice) (int64, error) {
 	tx, err := l.db.Begin()
@@ -392,6 +408,24 @@ func (l *Ledger) CreateCreditInvoice(user string, inv models.Invoice) (int64, er
           </div>
         </div>
       </div>
+
+      <!-- Item 6 -->
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <div class="timeline-meta">
+            <span class="timeline-id">SHOWCASE_HARDENING_01</span>
+            <span class="timeline-category">UI / UX / Branding</span>
+          </div>
+          <h4 class="timeline-title">Portfolio Showcase Optimization &amp; GitHub Integration</h4>
+          <p class="timeline-desc">
+            Hardened button contrast, resolved 404 console errors by ordering WebM before MP4, added responsive Mermaid scaling, and embedded dynamic GitHub access routes.
+          </p>
+          <div class="timeline-rationale">
+            <strong>Security Hardening:</strong> Improves tech-portfolio UX, guarantees 100% fail-safe video fallback across older iOS devices, and enables zero-friction open-source code validation.
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -428,6 +462,11 @@ func (l *Ledger) CreateCreditInvoice(user string, inv models.Invoice) (int64, er
       document.getElementById(tabId).classList.add('active');
       event.currentTarget.classList.add('active');
     }
+    
+    // Initialize syntax highlighting
+    document.addEventListener('DOMContentLoaded', () => {
+      hljs.highlightAll();
+    });
   </script>
 </body>
 </html>
