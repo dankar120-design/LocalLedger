@@ -401,5 +401,10 @@
     <kärna>1. Löste färg-specifikitetsfel på navigationsknappar. 2. Reordnade video källor till .webm före .mp4 för att undvika 404-fel. 3. Säkrade responsiv Mermaid SVG-skalning. 4. Integrerade mobilvänliga GitHub-länkar i header/footer samt ställde om OG-metadata. 5. Integrerade Highlight.js via CDN för Go-syntaxfärgning av källkod. 6. Designade konverteringsoptimerade och responsiva hero-CTA-knappar. 7. Implementerade smooth fade-in tab transitions via CSS-animationer.</kärna>
     <motivering>Den fientliga gransknings- och härdningsfasen (/goal) lyfter showcasen till absolut världsklass. Genom att lösa kontrastfel, introducera syntaxfärgning och hero-CTAs samt jämna ut övergångar garanteras en fläckfri och konverteringsstark presentation på GitHub Pages inför delning på LinkedIn.</motivering>
   </record>
+  <record id="SHOWCASE_LEGAL_DISCLAIMER_01" kategori="Säkerhet / Juridik / Branding">
+    <beslut>Ersatt positiv compliance-deklaration med en formell negativ disclaimer i Showcasens footer samt fastställt LinkedIn-copy.</beslut>
+    <kärna>1. Tagit bort ansvarsfällan "Designed in compliance..." i showcase/index.html. 2. Implementerat en tydlig ansvarsfriskrivning som definierar showcasen som en teknisk "Technical Preview" och designstudie utan Skatteverkets revision. 3. Tagit fram en specifik och juridiskt avgränsad text för LinkedIn "Utvalt"-sektionen.</kärna>
+    <motivering>Enligt "Adversarial Objectivity 2.0"-protokollet (FAS 2 granskning) utgjorde den tidigare compliance-deklarationen en juridisk ansvarsrisk eftersom WORM-skyddet bygger på triggers som kan kringgås lokalt i SQLite. Den nya disclaimern klargör systemets sanna natur som beta/teknisk förhandstitt utan att störa konverteringen hos Hero-sektionens CTAs.</motivering>
+  </record>
 </decision_ledger>
 
